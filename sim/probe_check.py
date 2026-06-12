@@ -490,6 +490,32 @@ def check_fixed_anchor_gives_horizontal_launch():
     assert np.linalg.norm(spike.position - [3, 0.1]) == 0.0
 
 
+def check_multi_target_push_shares_one_budget():
+    # A Coinshot pushing several anchors can't exceed their total push
+    # strength: the reaction on the pusher is capped at strength_newtons, so
+    # two coins do not give twice the launch of one. Non-canon modeling
+    # choice (canon is silent on how multi-target pushes divide; we cap the
+    # total budget). One target must behave exactly as a lone push.
+    def first_tick_upward_speed(coin_xs):
+        world = World()
+        wax = world.add_body(Body("wax", 80, (0, 1.0)))
+        coins = [world.add_body(Body(f"coin{i}", 0.004, (x, 0.01),
+                                     radius_m=0.01, is_metal=True))
+                 for i, x in enumerate(coin_xs)]
+        push = world.add_power(Steelpush(wax, coins, 2000))
+        push.active = True
+        world.step()  # one tick, before the grounded coins can move
+        return wax.velocity[1]
+
+    one = first_tick_upward_speed([0.0])
+    two = first_tick_upward_speed([-0.3, 0.3])
+    net_force_two = 80 * two / (1.0 / 240.0)  # mass * dv / dt
+    print(f"multi-target: one coin -> {one:.4f} m/s up, two coins -> {two:.4f} "
+          f"m/s up; two-coin net force {net_force_two:.0f} N (cap 2000, not doubled)")
+    assert two < 1.15 * one, "two anchors must not double the push (shared budget)"
+    assert net_force_two <= 2000.0 + 1.0, "total reaction can't exceed the strength budget"
+
+
 def check_rigid_constraint_stability():
     # A 10cm bullet (20g) fired at 100 m/s. It should maintain its length
     # and total momentum (accounting for gravity).
@@ -751,6 +777,7 @@ if __name__ == "__main__":
     check_static_grip_breaks_then_falls_off()
     check_shallow_push_skitters_steep_push_anchors()
     check_fixed_anchor_gives_horizontal_launch()
+    check_multi_target_push_shares_one_budget()
     check_iron_is_an_energy_pump()
     check_pulled_coins_never_anchor()
     check_grapple_to_fixed_metal()
