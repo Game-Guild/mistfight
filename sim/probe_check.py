@@ -516,6 +516,68 @@ def check_multi_target_push_shares_one_budget():
     assert net_force_two <= 2000.0 + 1.0, "total reaction can't exceed the strength budget"
 
 
+def check_steel_reserve_runs_dry():
+    # A finite steel supply burns down while the flame is lit and the push
+    # dies when it hits zero. 2 grams at 0.5 g/s lasts exactly 4 s; after
+    # that Wax gets no push and falls.
+    world = World()
+    wax = world.add_body(Body("wax", 80, (0, 1.0)))
+    anchor = world.add_body(Body("anchor", 0.004, (0, 0.05), radius_m=0.01,
+                                 is_metal=True, is_fixed=True))
+    push = world.add_power(Steelpush(wax, anchor, 2000, steel_grams=2.0,
+                                     burn_grams_per_second=0.5))
+    push.active = True
+    world.run(3.9)
+    assert push.steel_grams > 0.0, "should still have metal just before 4 s"
+    world.run(0.2)  # past the 4 s mark
+    print(f"steel reserve: empty after ~4 s (now {push.steel_grams:.3f} g), "
+          f"out_of_metal={push.out_of_metal}")
+    assert push.out_of_metal, "2 g at 0.5 g/s must run dry by 4 s"
+    # with the flame dead, the next tick delivers no push: Wax only feels gravity
+    speed_before = wax.velocity[1]
+    world.step()
+    fell = wax.velocity[1] < speed_before
+    assert fell, "no push once the metal is gone; Wax should be falling"
+
+
+def check_flaring_trades_push_for_metal():
+    # Flaring multiplies the push by `flare` but the burn rate by flare^2:
+    # flare 2 gives twice the force and burns four times as fast (a burst,
+    # not a cruising mode).
+    from sim import GRAVITY_M_PER_S2 as g
+
+    def first_tick_push_force(flare):
+        world = World()
+        wax = world.add_body(Body("wax", 80, (0, 1.0)))
+        anchor = world.add_body(Body("anchor", 0.004, (0, 0.05), radius_m=0.01,
+                                     is_metal=True, is_fixed=True))
+        push = world.add_power(Steelpush(wax, anchor, 2000, flare=flare))
+        push.active = True
+        world.step()
+        return 80 * wax.velocity[1] / world.dt_seconds + 80 * g
+
+    def seconds_to_empty(flare):
+        world = World()
+        wax = world.add_body(Body("wax", 80, (0, 1.0)))
+        anchor = world.add_body(Body("anchor", 0.004, (0, 0.05), radius_m=0.01,
+                                     is_metal=True, is_fixed=True))
+        push = world.add_power(Steelpush(wax, anchor, 2000, steel_grams=2.0,
+                                         burn_grams_per_second=0.5, flare=flare))
+        push.active = True
+        for step in range(int(10 / world.dt_seconds)):
+            world.step()
+            if push.out_of_metal:
+                return (step + 1) * world.dt_seconds
+        return None
+
+    force_ratio = first_tick_push_force(2.0) / first_tick_push_force(1.0)
+    life_ratio = seconds_to_empty(1.0) / seconds_to_empty(2.0)
+    print(f"flaring x2: push force x{force_ratio:.2f} (expect 2), "
+          f"metal drains x{life_ratio:.2f} faster (expect 4)")
+    assert abs(force_ratio - 2.0) < 0.02, "flare should multiply push by flare"
+    assert abs(life_ratio - 4.0) < 0.05, "flare should multiply burn by flare squared"
+
+
 def check_rigid_constraint_stability():
     # A 10cm bullet (20g) fired at 100 m/s. It should maintain its length
     # and total momentum (accounting for gravity).
@@ -778,6 +840,8 @@ if __name__ == "__main__":
     check_shallow_push_skitters_steep_push_anchors()
     check_fixed_anchor_gives_horizontal_launch()
     check_multi_target_push_shares_one_budget()
+    check_steel_reserve_runs_dry()
+    check_flaring_trades_push_for_metal()
     check_iron_is_an_energy_pump()
     check_pulled_coins_never_anchor()
     check_grapple_to_fixed_metal()

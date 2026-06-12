@@ -63,7 +63,7 @@ docstring and the notebook prose (linear push falloff, storing floor at
 ```sh
 # from this folder (sessions should be LAUNCHED from this folder —
 # .claude/settings.local.json sets bypassPermissions here)
-python -m sim.probe_check              # 33 fast assertions, the regression net
+python -m sim.probe_check              # 36 fast assertions, the regression net
 python notebooks\execute_notebooks.py  # run all notebooks, embed outputs
 ```
 
@@ -78,7 +78,12 @@ opens as raw JSON text: right-click → Open With → Jupyter Notebook editor.
   anchors).
 - `sim/bodies.py` — point masses. `change_mass` conserves MOMENTUM (canon).
 - `sim/steelpush.py` — force pair along center line, Newton's third law,
-  linear falloff to zero at max range (falloff shape is our choice).
+  linear falloff to zero at max range (falloff shape is our choice). Holds
+  one or many targets: strength_newtons is a TOTAL push budget capped across
+  all targets (multi-target division is our choice; canon silent). Optional
+  finite steel_grams reserve + burn_grams_per_second (burns on the local
+  clock) + flare multiplier (push x flare, burn x flare^2). Defaults
+  (unlimited reserve, flare 1) reproduce the original single-target push.
 - `sim/feruchemy.py` — `IronFeruchemy` (mass) and `GoldFeruchemy` (health):
   three states (storing / tapping / neither), continuous flow, zero-sum.
   Storing makes you actively diminished the whole time.
@@ -241,10 +246,31 @@ the prior model wrong is itself a failure mode; the fix is an independent
 check, not authority. Not modeled, stated: lift / Magnus, wind, altitude
 thinning. Probe suite: 33 checks.
 
-**NEXT UP: notebook 14 — portable anchors.** Push off a moving
+Done 2026-06-12: **steel robustness arc** (Elliott's direction — finish
+steel before adding metals; notebooks 14-16, sim/steelpush.py). Notebook 14:
+multi-target pushing as one shared, capped budget (canon-researched — canon
+is silent on force division, so the cap is our stated choice; off-center
+anchors shove you sideways, symmetric ones cancel it = the point-mass shadow
+of the flying tripod). Notebook 15: the Coinshot hover — a steady push is an
+undamped spring (k = strength/range, period 5.03 s vs 5.02 measured), so it
+bobs forever; air drag damps it over ~tens of minutes, active push
+modulation (a PD controller) in ~2 s. Resolves the notebook-02 hover open
+item; Elliott was right that it was a missing damping term, not a needed
+trick. Notebook 16: steel as a spent resource — finite reserve burns on the
+local clock, flaring multiplies push by flare and burn by flare^2 (a burst,
+not a cruise; the reserve also sets up duralumin). Probe suite: 36 checks.
+
+**NEXT UP: notebook 17 — portable anchors.** Push off a moving
 bullet (the near-teleport hypothesis vs the momentum ledger; a bullet is just
 a small fast metal Body, no gun needed; sweep stored-weight fraction x
-projectile mass).
+projectile mass). Or duralumin, now that steel has a reserve to dump.
+
+**Standing canon-research idea (Elliott, 2026-06-12):** a RAG over the
+Mistborn series text would settle the modeling choices we had to guess -
+multi-target push division, the 1/distance falloff, the flare cost curve -
+from Brandon's verbose Coinshot battles. Filed as the project's eventual
+canon-research layer; prose is evocative not equational, so it would inform
+strongly, rarely hand over a formula.
 
 **Pewter: DEFERRED, deliberately** (Elliott + analysis, 2026-06-10): it is
 a multiplier and the lab hasn't built what it multiplies — no melee, no

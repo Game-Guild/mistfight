@@ -1,47 +1,55 @@
 """Allomantic steel: the Steelpush.
 
 A push is a force PAIR along the line between the pusher's center and a metal
-target's center — Newton's third law, no exceptions. The pusher is shoved
+target's center -- Newton's third law, no exceptions. The pusher is shoved
 away from the metal and the metal is shoved away from the pusher, with equal
 and opposite force.
 
 Whether anything dramatic happens depends entirely on the bodies involved,
 not on this class. A coin in midair rockets off and absorbs almost no
 reaction before leaving range; a coin pinned against the ground cannot move,
-so the pusher takes the full launch. None of that is special-cased — it
+so the pusher takes the full launch. None of that is special-cased -- it
 falls out of the force pair plus the world's ground constraint.
 
 Multiple targets: a Coinshot can push on several metals at once (a tripod of
 coins to fly, a spray of coins at a target). One Steelpush can hold a list
-of targets. How the push divides across them is NOT settled by canon —
-Coppermind and Word of Brandon are silent on multi-target force division
+of targets. How the push divides across them is NOT settled by canon
 (checked 2026-06-12; the only "split" rule in the wild is the Mistborn
-Adventure Game RPG, and that splits metal CONSUMPTION, not force). So this
-is a stated modeling choice, grounded in the canon that IS clear:
+Adventure Game RPG, and it splits metal CONSUMPTION, not force). Stated
+modeling choice, grounded in the canon that IS clear (push tracks the
+Allomancer's weight; force reflects onto them, so they brace a bounded
+total): strength_newtons is the TOTAL push budget. Each target demands the
+force a lone push would give it; if the demands sum past the budget, every
+target scales down equally so the total delivered equals the budget. One
+target reduces exactly to the old behavior, so earlier results are unchanged.
 
-  Canon: push strength is proportional to the Allomancer's weight, and if an
-  anchor holds, the force reflects back onto the Allomancer. So the
-  Allomancer can only brace against a bounded total reaction.
+Metal reserve and flaring (steel as a consumed resource):
 
-  Our choice: strength_newtons is the Allomancer's TOTAL push budget. Each
-  target demands the force a lone push would give it (full strength times the
-  distance falloff); if the demands sum to more than the budget, every target
-  is scaled down by the same factor so the total delivered force equals the
-  budget. Push one point-blank anchor and it gets the whole budget; push
-  three and they share it. A single target reduces exactly to the old
-  behavior, so every earlier push result is unchanged.
+  - steel_grams is the Coinshot's metal supply. None means unlimited (the
+    default, so every experiment written before this still behaves the
+    same). A finite supply burns down while the flame is lit and the push
+    dies when it hits zero.
+  - burn_grams_per_second is the base consumption rate, charged on the
+    pusher's LOCAL clock -- burning is flesh-bound chemistry, so a Coinshot
+    inside a bendalloy bubble burns through their metal faster in world
+    time, like healing and poison (notebooks 04, 06).
+  - flare is a multiplier (>= 1) for burning the metal harder. Stated
+    modeling choice: flaring multiplies the push by `flare` but the burn
+    rate by `flare` SQUARED -- double your push, quadruple your burn. So
+    flaring is a burst, not a cruising mode; canon says flaring "burns
+    brighter for more power, faster," and the square is our cost curve.
 
 Push strength falls off linearly with distance, reaching zero at max_range.
-Canon says pushes weaken with distance (≈ inversely with distance); the
-LINEAR shape is our modeling choice, stated here so nobody mistakes it for
-lore.
+Canon says pushes weaken with distance (roughly as 1/distance); the LINEAR
+shape is our modeling choice, stated so nobody mistakes it for lore.
 """
 
 import numpy as np
 
 
 class Steelpush:
-    def __init__(self, pusher, targets, strength_newtons, max_range_m=16.0):
+    def __init__(self, pusher, targets, strength_newtons, max_range_m=16.0,
+                 steel_grams=None, burn_grams_per_second=0.0, flare=1.0):
         # `targets` may be a single Body or a list of them.
         target_list = list(targets) if isinstance(targets, (list, tuple)) else [targets]
         for target in target_list:
@@ -51,6 +59,9 @@ class Steelpush:
         self.targets = target_list
         self.strength_newtons = float(strength_newtons)
         self.max_range_m = float(max_range_m)
+        self.steel_grams = steel_grams          # None = unlimited
+        self.burn_grams_per_second = float(burn_grams_per_second)
+        self.flare = float(flare)
         self.active = False
 
     @property
@@ -58,12 +69,18 @@ class Steelpush:
         """Backward-compatible accessor for the single-target case."""
         return self.targets[0]
 
+    @property
+    def out_of_metal(self):
+        return self.steel_grams is not None and self.steel_grams <= 0.0
+
     def apply_forces(self):
-        if not self.active:
+        if not self.active or self.out_of_metal:
             return
 
-        # 1. Each in-range target demands the force a lone push would give it:
-        #    full strength scaled by the linear distance falloff.
+        # Flaring scales the whole push budget.
+        effective_strength = self.strength_newtons * self.flare
+
+        # 1. Each in-range target demands the force a lone push would give it.
         demands = []  # (target, direction_to_pusher, demand_magnitude)
         total_demand = 0.0
         for target in self.targets:
@@ -72,24 +89,31 @@ class Steelpush:
             if distance >= self.max_range_m:
                 continue  # out of range, this line finds nothing
             if distance < 1e-9:
-                # Degenerate: bodies coincident. Push straight up so the math
-                # stays finite.
-                direction_to_pusher = np.array([0.0, 1.0])
+                direction_to_pusher = np.array([0.0, 1.0])  # coincident: push up
             else:
                 direction_to_pusher = offset / distance
-            demand = self.strength_newtons * (1.0 - distance / self.max_range_m)
+            demand = effective_strength * (1.0 - distance / self.max_range_m)
             demands.append((target, direction_to_pusher, demand))
             total_demand += demand
+
+        # Burn metal while the flame is lit, whether or not a target is in range.
+        self._burn_metal()
 
         if not demands:
             return
 
-        # 2. Cap the total delivered force at the Allomancer's strength budget.
-        #    With one target this scale is always 1 (a lone demand never
-        #    exceeds the budget), so single-target pushes are unchanged.
-        scale = min(1.0, self.strength_newtons / total_demand)
-
+        # 2. Cap the total delivered force at the (flared) strength budget.
+        scale = min(1.0, effective_strength / total_demand)
         for target, direction_to_pusher, demand in demands:
             force_on_pusher = direction_to_pusher * (demand * scale)
             self.pusher.apply_force(force_on_pusher)
             target.apply_force(-force_on_pusher)
+
+    def _burn_metal(self):
+        if self.steel_grams is None or self.burn_grams_per_second == 0.0:
+            return
+        local_dt = self.pusher.local_dt_seconds
+        if local_dt is None:
+            return
+        burned = self.burn_grams_per_second * (self.flare ** 2) * local_dt
+        self.steel_grams = max(0.0, self.steel_grams - burned)
