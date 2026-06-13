@@ -27,7 +27,7 @@ Metal reserve and flaring (steel as a consumed resource):
 
   - steel_grams is the Coinshot's metal supply. None means unlimited (the
     default, so every experiment written before this still behaves the
-    same). A finite supply burns down while the flame is lit and the push
+    same). A finite supply burns down while the pusher is burning and the push
     dies when it hits zero.
   - burn_grams_per_second is the base consumption rate, charged on the
     pusher's LOCAL clock -- burning is flesh-bound chemistry, so a Coinshot
@@ -96,7 +96,7 @@ class Steelpush:
             demands.append((target, direction_to_pusher, demand))
             total_demand += demand
 
-        # Burn metal while the flame is lit, whether or not a target is in range.
+        # Burn metal while the pusher is burning, whether or not a target is in range.
         self._burn_metal()
 
         if not demands:
