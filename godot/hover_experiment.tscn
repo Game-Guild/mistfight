@@ -1,0 +1,270 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://hover_pusher.gd" id="1_hover"]
+[ext_resource type="Texture2D" uid="uid://c8qup4kukoeq4" path="res://assets/samurai/IDLE.png" id="2_idle"]
+[ext_resource type="Texture2D" uid="uid://bfdiqflw84vyw" path="res://assets/samurai/RUN.png" id="3_run"]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_player"]
+radius = 8.0
+height = 36.0
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_idle_0"]
+atlas = ExtResource("2_idle")
+region = Rect2(0, 0, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_idle_1"]
+atlas = ExtResource("2_idle")
+region = Rect2(96, 0, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_idle_2"]
+atlas = ExtResource("2_idle")
+region = Rect2(192, 0, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_idle_3"]
+atlas = ExtResource("2_idle")
+region = Rect2(288, 0, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_idle_4"]
+atlas = ExtResource("2_idle")
+region = Rect2(384, 0, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_idle_5"]
+atlas = ExtResource("2_idle")
+region = Rect2(480, 0, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_idle_6"]
+atlas = ExtResource("2_idle")
+region = Rect2(576, 0, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_idle_7"]
+atlas = ExtResource("2_idle")
+region = Rect2(672, 0, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_idle_8"]
+atlas = ExtResource("2_idle")
+region = Rect2(768, 0, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_idle_9"]
+atlas = ExtResource("2_idle")
+region = Rect2(864, 0, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_run_0"]
+atlas = ExtResource("3_run")
+region = Rect2(0, 0, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_run_1"]
+atlas = ExtResource("3_run")
+region = Rect2(96, 0, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_run_2"]
+atlas = ExtResource("3_run")
+region = Rect2(192, 0, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_run_3"]
+atlas = ExtResource("3_run")
+region = Rect2(288, 0, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_run_4"]
+atlas = ExtResource("3_run")
+region = Rect2(384, 0, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_run_5"]
+atlas = ExtResource("3_run")
+region = Rect2(480, 0, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_run_6"]
+atlas = ExtResource("3_run")
+region = Rect2(576, 0, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_run_7"]
+atlas = ExtResource("3_run")
+region = Rect2(672, 0, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_run_8"]
+atlas = ExtResource("3_run")
+region = Rect2(768, 0, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_run_9"]
+atlas = ExtResource("3_run")
+region = Rect2(864, 0, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_run_10"]
+atlas = ExtResource("3_run")
+region = Rect2(960, 0, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_run_11"]
+atlas = ExtResource("3_run")
+region = Rect2(1056, 0, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_run_12"]
+atlas = ExtResource("3_run")
+region = Rect2(1152, 0, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_run_13"]
+atlas = ExtResource("3_run")
+region = Rect2(1248, 0, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_run_14"]
+atlas = ExtResource("3_run")
+region = Rect2(1344, 0, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_run_15"]
+atlas = ExtResource("3_run")
+region = Rect2(1440, 0, 96, 96)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_hover"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_idle_0")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_idle_1")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_idle_2")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_idle_3")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_idle_4")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_idle_5")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_idle_6")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_idle_7")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_idle_8")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_idle_9")
+}],
+"loop": 1,
+"name": &"IDLE",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run_0")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run_1")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run_2")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run_3")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run_4")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run_5")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run_6")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run_7")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run_8")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run_9")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run_10")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run_11")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run_12")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run_13")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run_14")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run_15")
+}],
+"loop": 1,
+"name": &"RUN",
+"speed": 5.0
+}]
+
+[sub_resource type="WorldBoundaryShape2D" id="WorldBoundaryShape2D_floor"]
+
+[node name="HoverExperiment" type="Node2D"]
+
+[node name="Floor" type="StaticBody2D" parent="."]
+position = Vector2(0, 300)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Floor"]
+shape = SubResource("WorldBoundaryShape2D_floor")
+
+[node name="FloorLine" type="Line2D" parent="Floor"]
+points = PackedVector2Array(-400, 0, 400, 0)
+width = 2.0
+default_color = Color(0.4, 0.4, 0.4, 1)
+
+[node name="Anchor" type="Node2D" parent="."]
+position = Vector2(0, 298)
+
+[node name="Polygon2D" type="Polygon2D" parent="Anchor"]
+position = Vector2(-4, -2)
+scale = Vector2(1, 1.5)
+color = Color(0.91197884, 0.0025784366, 0.0014126375, 1)
+polygon = PackedVector2Array(0, 0, 8, 0, 8, 2, 0, 2)
+
+[node name="EquilibriumMarker" type="Line2D" parent="."]
+width = 1.0
+default_color = Color(0.6, 0.6, 0.6, 0.8)
+
+[node name="TrajectoryTrace" type="Line2D" parent="."]
+width = 1.0
+default_color = Color(1, 1, 0, 1)
+
+[node name="Player" type="CharacterBody2D" parent="."]
+position = Vector2(0, 265)
+script = ExtResource("1_hover")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Player"]
+position = Vector2(0, 16)
+shape = SubResource("CapsuleShape2D_player")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="Player"]
+sprite_frames = SubResource("SpriteFrames_hover")
+animation = &"IDLE"
+
+[node name="Camera2D" type="Camera2D" parent="Player"]
+zoom = Vector2(0.8, 0.8)
+position_smoothing_enabled = true
+position_smoothing_speed = 4.0
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="Readout" type="Label" parent="HUD"]
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 460.0
+offset_bottom = 110.0
+text = "t = 0.00 s"
+
+[node name="Controls" type="Label" parent="HUD"]
+offset_left = 16.0
+offset_top = 650.0
+offset_right = 1000.0
+offset_bottom = 710.0
+text = "arrows: move   space: jump (kick)   hold H: push on anchor
+C: toggle steady push / PD-controlled push   D: toggle air drag   R: reset"
