@@ -92,28 +92,28 @@ Counting only fully opaque pixels (ignoring anti-aliasing blends) across
 all four animation sheets combined: **exactly 20 unique colors**, reused
 across the whole character.
 
-| Hex | RGB | Role (by inspection) |
+| Swatch | RGB | Role (by inspection) |
 | --- | --- | --- |
-| `#100515` | 16, 5, 21 | outline (darkest) |
-| `#0E071B` | 14, 7, 27 | outline |
-| `#131313` | 19, 19, 19 | near-black neutral shadow |
-| `#1A1932` | 26, 25, 50 | navy shadow (pants/robe) |
-| `#221C36` | 34, 28, 54 | navy shadow |
-| `#391F21` | 57, 31, 33 | maroon shadow (sash/scabbard) |
-| `#571C27` | 87, 28, 39 | maroon (sash/scabbard) |
-| `#2A2F4E` | 42, 47, 78 | navy midtone (pants) |
-| `#5D2C28` | 93, 44, 40 | brown shadow (boots) |
-| `#424C6E` | 66, 76, 110 | navy midtone (robe shadow) |
-| `#BF6F4A` | 191, 111, 74 | brown (boots) |
-| `#858585` | 133, 133, 133 | neutral grey (hair shadow) |
-| `#92A1B9` | 146, 161, 185 | pale blue-grey (robe/hair) |
-| `#E69C69` | 230, 156, 105 | skin midtone |
-| `#B4B4B4` | 180, 180, 180 | neutral grey (light) |
-| `#C3CBDB` | 195, 203, 219 | pale blue-white (robe/hair) |
-| `#C7CFDD` | 199, 207, 221 | pale blue-white (robe/hair) |
-| `#F6CA9F` | 246, 202, 159 | skin highlight |
-| `#FFFCFC` | 255, 252, 252 | near-white highlight |
-| `#FFFFFF` | 255, 255, 255 | white highlight |
+| ![#100515](https://img.shields.io/badge/-100515-100515) | 16, 5, 21 | outline (darkest) |
+| ![#0E071B](https://img.shields.io/badge/-0E071B-0E071B) | 14, 7, 27 | outline |
+| ![#131313](https://img.shields.io/badge/-131313-131313) | 19, 19, 19 | near-black neutral shadow |
+| ![#1A1932](https://img.shields.io/badge/-1A1932-1A1932) | 26, 25, 50 | navy shadow (pants/robe) |
+| ![#221C36](https://img.shields.io/badge/-221C36-221C36) | 34, 28, 54 | navy shadow |
+| ![#391F21](https://img.shields.io/badge/-391F21-391F21) | 57, 31, 33 | maroon shadow (sash/scabbard) |
+| ![#571C27](https://img.shields.io/badge/-571C27-571C27) | 87, 28, 39 | maroon (sash/scabbard) |
+| ![#2A2F4E](https://img.shields.io/badge/-2A2F4E-2A2F4E) | 42, 47, 78 | navy midtone (pants) |
+| ![#5D2C28](https://img.shields.io/badge/-5D2C28-5D2C28) | 93, 44, 40 | brown shadow (boots) |
+| ![#424C6E](https://img.shields.io/badge/-424C6E-424C6E) | 66, 76, 110 | navy midtone (robe shadow) |
+| ![#BF6F4A](https://img.shields.io/badge/-BF6F4A-BF6F4A) | 191, 111, 74 | brown (boots) |
+| ![#858585](https://img.shields.io/badge/-858585-858585) | 133, 133, 133 | neutral grey (hair shadow) |
+| ![#92A1B9](https://img.shields.io/badge/-92A1B9-92A1B9) | 146, 161, 185 | pale blue-grey (robe/hair) |
+| ![#E69C69](https://img.shields.io/badge/-E69C69-E69C69) | 230, 156, 105 | skin midtone |
+| ![#B4B4B4](https://img.shields.io/badge/-B4B4B4-B4B4B4) | 180, 180, 180 | neutral grey (light) |
+| ![#C3CBDB](https://img.shields.io/badge/-C3CBDB-C3CBDB) | 195, 203, 219 | pale blue-white (robe/hair) |
+| ![#C7CFDD](https://img.shields.io/badge/-C7CFDD-C7CFDD) | 199, 207, 221 | pale blue-white (robe/hair) |
+| ![#F6CA9F](https://img.shields.io/badge/-F6CA9F-F6CA9F) | 246, 202, 159 | skin highlight |
+| ![#FFFCFC](https://img.shields.io/badge/-FFFCFC-FFFCFC) | 255, 252, 252 | near-white highlight |
+| ![#FFFFFF](https://img.shields.io/badge/-FFFFFF-FFFFFF) | 255, 255, 255 | white highlight |
 
 That sorts into roughly six color families -- near-black outline, navy
 (pants/robe shadow), maroon (sash/scabbard), brown/skin, neutral grey
