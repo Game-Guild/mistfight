@@ -1,3 +1,6 @@
 __pycache__/
 .ipynb_checkpoints/
 .claude/
+.vscode/
+godot/*.log
+godot/*.tmp
