@@ -120,10 +120,9 @@ Rules:
   the condition.
 - Code reads top-to-bottom as a continuous explanation — structure for
   narrative flow, not compactness.
+- split code into step by step blocks if it helps clarity or itnroduce concepts with markdown between
 - Default audience is zero programming background, zero math background.
   Never assume the reader already gets it.
-- Markdown never references implementation details (test function names,
-  internal file paths) in reader-facing prose.
 - Intro/setup cells: separate framing from methodology/glossary. Don't
   front-load four jobs into one dense block; introduce terms where first used.
 - Goal state: code and markdown are equally legible on their own. Neither half
