@@ -31,7 +31,7 @@ func enter(_previous_state_name: String) -> void:
 	# Only throw if the coin is still in hand. If it is already lying on the
 	# ground or flying, pressing shoot just starts pushing whatever is out
 	# there -- which is what hovering over a landed coin needs.
-	if player_body.coin.is_carried:
+	if player_body.carried_coin.is_carried:
 		_throw_coin()
 		seconds_since_throw = 0.0
 	else:
@@ -40,7 +40,7 @@ func enter(_previous_state_name: String) -> void:
 		seconds_since_throw = THROW_WINDUP_SECONDS
 	# The Steel line stays up through the push, since that is when you most want
 	# to see the line the force acts along. The reticle stays hidden.
-	player_body.steel_line.show()
+	player_body.steel_lines.show()
 
 
 func physics_process(delta: float) -> void:
@@ -53,7 +53,6 @@ func physics_process(delta: float) -> void:
 		# Mid-windup: the coin flies on the flick alone, no push and so no
 		# recoil. Since this runs on held input, tapping the key gives a pure
 		# throw and holding it gives throw-then-push.
-		player_body.update_steel_line_to_coin()
 		return
 
 	_push_against_coin(delta)
@@ -61,7 +60,7 @@ func physics_process(delta: float) -> void:
 
 func exit() -> void:
 	player_body.reticle.hide()
-	player_body.steel_line.hide()
+	player_body.steel_lines.hide()
 
 
 func _throw_coin() -> void:
@@ -76,15 +75,15 @@ func _throw_coin() -> void:
 		# Mouse sitting exactly on the player leaves no direction to throw in.
 		# Drop it at your feet, which is the hovering case anyway.
 		throw_direction = Vector2.DOWN
-	player_body.coin.release()
-	player_body.coin.velocity = throw_direction * player_body.THROW_SPEED_PX_PER_S
+	player_body.carried_coin.release()
+	player_body.carried_coin.velocity = throw_direction * player_body.THROW_SPEED_PX_PER_S
 
 
 func _push_against_coin(delta: float) -> void:
 	# Where the coin actually is, relative to the player. Everything below is
 	# derived from this one vector -- how hard the push is (distance) AND which
 	# way it points (direction).
-	var coin_offset: Vector2 = player_body.coin.global_position - player_body.global_position
+	var coin_offset: Vector2 = player_body.carried_coin.global_position - player_body.global_position
 	var coin_distance_m: float = coin_offset.length() / player_body.PIXELS_PER_METER
 	var falloff: float = max(0.0, 1.0 - coin_distance_m / player_body.MAX_RANGE_M)
 
@@ -142,8 +141,6 @@ func _push_against_coin(delta: float) -> void:
 	# the other. Same magnitude, divided by the player's much larger mass.
 	var recoil: Vector2 = -push_direction * force / player_body.BASE_MASS_KG * delta
 	var mode_text: String = "steady" if player_body.push_mode == Player.PushMode.STEADY else "active_control"
-	player_body.debug_log.store_line("[coin_shoot] mode=" + mode_text + " angle=" + str(angle) + " coin_distance_m=" + str(coin_distance_m) + " force=" + str(force) + " coin_global_pos=" + str(player_body.coin.global_position) + " coin_velocity=" + str(player_body.coin.velocity))
+	player_body.debug_log.store_line("[coin_shoot] mode=" + mode_text + " angle=" + str(angle) + " coin_distance_m=" + str(coin_distance_m) + " force=" + str(force) + " coin_global_pos=" + str(player_body.carried_coin.global_position) + " coin_velocity=" + str(player_body.carried_coin.velocity))
 	player_body.push.emit(angle, force)
 	player_body.pending_recoil += recoil
-	# Redraw the line every tick so it tracks the coin as it moves away.
-	player_body.update_steel_line_to_coin()

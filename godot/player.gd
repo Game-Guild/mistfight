@@ -30,8 +30,12 @@ signal push(angle: float, force: float)
 @onready var state_machine: PlayerStateMachine = $StateMachine
 @onready var animated_sprite: AnimatedSprite2D = $AnimatedSprite2D
 @onready var reticle: Polygon2D = $Reticle
-@onready var steel_line: Line2D = $"Steel line"
-@onready var coin: RigidBody2D = $"../Coin"
+@onready var steel_lines: Node2D = $SteelLines
+# The coin this player is holding. Deliberately separate from the general
+# metal query below: your own held coin is not something you can push off.
+# Someone ELSE's held coin is fair game, which is why the exclusion is by
+# identity rather than by a global "is anyone carrying this" flag.
+@onready var carried_coin: RigidBody2D = $"../Coin"
 @onready var push_mode_readout: Label = $"../HUD/PushModeReadout"
 
 var pending_recoil: Vector2 = Vector2.ZERO
@@ -55,7 +59,7 @@ var air_braking_enabled: bool = true
 
 
 func _ready() -> void:
-	coin.add_collision_exception_with(self)
+	carried_coin.add_collision_exception_with(self)
 	debug_log = FileAccess.open("res://player_debug.log", FileAccess.WRITE)
 	# Last line on purpose: the @onready vars above (animated_sprite,
 	# reticle, and so on) must already be set before the first state's
@@ -73,8 +77,8 @@ func _physics_process(delta: float) -> void:
 		velocity += get_gravity() * delta
 
 	# While carried, the player owns the coin's position outright.
-	if coin.is_carried:
-		coin.global_position = global_position + Vector2(0, 13)
+	if carried_coin.is_carried:
+		carried_coin.global_position = global_position + Vector2(0, 13)
 
 	# States that commit to an animation -- Attack, Hurt -- refuse every entry
 	# trigger below until they finish. Everything else can be acted out of
@@ -94,7 +98,7 @@ func _physics_process(delta: float) -> void:
 		print("[toggle] midair braking -> ", "ON" if air_braking_enabled else "OFF")
 	# Testing affordance, not a mechanic -- see coin.gd's recall().
 	if Input.is_action_just_pressed("reset_hover"):
-		coin.recall()
+		carried_coin.recall()
 		print("[toggle] coin recalled to hand")
 	_update_toggle_readout()
 
@@ -174,12 +178,21 @@ func compute_animation_offset_y() -> float:
 	return (visible_area.position.y + visible_area.position.y + visible_area.size.y) / 2.0 - frame_height / 2.0
 
 
-func update_steel_line_to_coin() -> void:
-	# The blue line an Allomancer sees to nearby metal, drawn along the same
-	# line the push force acts on, so the picture and the physics cannot drift
-	# apart. Both ends are in the player's local space, since "Steel line" is a
-	# child of Player: Vector2.ZERO is the point coin_offset is measured from.
-	steel_line.points = [Vector2.ZERO, to_local(coin.global_position)]
+func find_metal_in_range() -> Array:
+	# Every piece of metal close enough to be worth pushing. Anything in the
+	# "metal" group counts, so adding metal to a level needs no changes here.
+	#
+	# Range and its falloff are a stated modelling choice, not canon -- see
+	# sim/steelpush.py. Past MAX_RANGE_M a push delivers nothing, so those
+	# bodies are not targets at all.
+	var range_px: float = MAX_RANGE_M * PIXELS_PER_METER
+	var found: Array = []
+	for metal in get_tree().get_nodes_in_group("metal"):
+		if metal == carried_coin and carried_coin.is_carried:
+			continue  # your own hand is not something to push off
+		if global_position.distance_to(metal.global_position) <= range_px:
+			found.append(metal)
+	return found
 
 
 func take_hit() -> void:

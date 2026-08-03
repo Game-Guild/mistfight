@@ -156,6 +156,11 @@ func _ready() -> void:
 		print("[tunnel_test] infinite plane walls disabled; only the 50px rectangle walls remain")
 	if air_braking >= 0:
 		player.air_braking_enabled = air_braking == 1
+	var metal_found: Array = player.find_metal_in_range()
+	var metal_report: Array = []
+	for metal in metal_found:
+		metal_report.append("%s@%.0fpx" % [metal.name, player.global_position.distance_to(metal.global_position)])
+	print("[tunnel_test] metal in range (%d): %s" % [metal_found.size(), ", ".join(metal_report)])
 	print("[tunnel_test] label=%s settle_ticks=%d hold_ticks=%d coin_shape_scale=%s continuous_cd=%d"
 		% [label, settle_ticks, hold_ticks, coin_shape_scale, coin.continuous_cd])
 
