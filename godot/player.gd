@@ -25,12 +25,11 @@ const MAX_RANGE_M = 16.0
 # 980 / 9.81 = ~100, so 1 meter in the sim equals ~100 pixels here.
 const PIXELS_PER_METER = 100.0
 
-signal push(angle: float, force: float)
-
 @onready var state_machine: PlayerStateMachine = $StateMachine
 @onready var animated_sprite: AnimatedSprite2D = $AnimatedSprite2D
 @onready var reticle: Polygon2D = $Reticle
 @onready var steel_lines: Node2D = $SteelLines
+@onready var push_arrow: Node2D = $PushArrow
 # The coin this player is holding. Deliberately separate from the general
 # metal query below: your own held coin is not something you can push off.
 # Someone ELSE's held coin is fair game, which is why the exclusion is by
@@ -176,6 +175,56 @@ func compute_animation_offset_y() -> float:
 	var visible_area: Rect2i = texture.get_image().get_used_rect()  # box around the actual non-transparent pixels
 	var frame_height: float = texture.get_height()
 	return (visible_area.position.y + visible_area.position.y + visible_area.size.y) / 2.0 - frame_height / 2.0
+
+
+func compute_pushes(targets: Array, total_budget_n: float) -> Array:
+	# How a push divides across several pieces of metal at once. Ported from
+	# sim/steelpush.py, whose docstring records that this split is NOT settled
+	# by canon and explains the reasoning behind the choice made there.
+	#
+	# The rule: total_budget_n is the whole push, not a per-target amount. Each
+	# target demands the force a lone push would give it at its distance; if the
+	# demands add up to more than the budget, everything scales down equally so
+	# the total delivered equals the budget. One target reduces exactly to the
+	# single-target behaviour, so nothing changes for a lone coin.
+	#
+	# Each entry is { target, direction, force_px }, where direction points from
+	# the player TOWARD the target -- so the target is shoved along it and the
+	# player recoils against it. Equal and opposite, as a force pair must be.
+	var demands: Array = []
+	var total_demand_n: float = 0.0
+	for target in targets:
+		var offset: Vector2 = target.global_position - global_position
+		var distance_m: float = offset.length() / PIXELS_PER_METER
+		if distance_m >= MAX_RANGE_M or distance_m < 0.0001:
+			continue
+		var demand_n: float = total_budget_n * (1.0 - distance_m / MAX_RANGE_M)
+		demands.append({"target": target, "direction": offset.normalized(), "demand_n": demand_n})
+		total_demand_n += demand_n
+
+	if demands.is_empty():
+		return []
+
+	var scale: float = min(1.0, total_budget_n / total_demand_n)
+	var pushes: Array = []
+	for demand in demands:
+		pushes.append({
+			"target": demand.target,
+			"direction": demand.direction,
+			"force_px": demand.demand_n * scale * PIXELS_PER_METER,
+		})
+	return pushes
+
+
+func net_push_on_player(pushes: Array) -> Vector2:
+	# What the player actually feels: every target's reaction added as a vector.
+	# The total is capped in magnitude by the budget, but these are directions,
+	# so targets on opposite sides cancel. Push off two things either side of you
+	# and you go nowhere while still spending the same steel.
+	var net: Vector2 = Vector2.ZERO
+	for push_item in pushes:
+		net -= push_item.direction * push_item.force_px
+	return net
 
 
 func find_metal_in_range() -> Array:

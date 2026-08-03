@@ -5,6 +5,7 @@ func enter(_previous_state_name: String) -> void:
 	player_body.animated_sprite.play("COIN_TARGET")
 	player_body.reticle.show()
 	player_body.steel_lines.show()
+	player_body.push_arrow.show()
 
 
 func physics_process(_delta: float) -> void:
@@ -28,3 +29,4 @@ func physics_process(_delta: float) -> void:
 func exit() -> void:
 	player_body.reticle.hide()
 	player_body.steel_lines.hide()
+	player_body.push_arrow.hide()

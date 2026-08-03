@@ -8,6 +8,7 @@
 [ext_resource type="Texture2D" uid="uid://bfdiqflw84vyw" path="res://assets/samurai/RUN.png" id="5_lquwl"]
 [ext_resource type="Script" uid="uid://ho2k6vwibax8" path="res://coin.gd" id="7_272bh"]
 [ext_resource type="Script" path="res://steel_lines.gd" id="steel_lines_script"]
+[ext_resource type="Script" path="res://push_arrow.gd" id="push_arrow_script"]
 [ext_resource type="Script" uid="uid://ikwyhrig4ywf" path="res://player_states/attack_state.gd" id="attack_state_script"]
 [ext_resource type="Script" uid="uid://bxr63b2pl1kpe" path="res://player_states/coin_shoot_state.gd" id="coin_shoot_state_script"]
 [ext_resource type="Script" uid="uid://dk57yaoqscjxp" path="res://player_states/coin_target_state.gd" id="coin_target_state_script"]
@@ -348,6 +349,10 @@ polygon = PackedVector2Array(1, -1, 1, -2, 0, -2, 0, -2, -1, -2, -1, -1, -1, 0, 
 visible = false
 script = ExtResource("steel_lines_script")
 
+[node name="PushArrow" type="Node2D" parent="Player"]
+visible = false
+script = ExtResource("push_arrow_script")
+
 [node name="StateMachine" type="Node" parent="Player" unique_id=576868919]
 script = ExtResource("state_machine_script")
 
@@ -517,5 +522,4 @@ theme_override_font_sizes/font_size = 16
 text = "Push mode (C): Steady
 Midair braking (V): On"
 
-[connection signal="push" from="Player" to="Coin" method="_on_character_body_2d_push"]
 [connection signal="animation_finished" from="Player/AnimatedSprite2D" to="Player" method="_on_animated_sprite_2d_animation_finished"]

@@ -41,6 +41,7 @@ func enter(_previous_state_name: String) -> void:
 	# The Steel line stays up through the push, since that is when you most want
 	# to see the line the force acts along. The reticle stays hidden.
 	player_body.steel_lines.show()
+	player_body.push_arrow.show()
 
 
 func physics_process(delta: float) -> void:
@@ -55,12 +56,13 @@ func physics_process(delta: float) -> void:
 		# throw and holding it gives throw-then-push.
 		return
 
-	_push_against_coin(delta)
+	_push_against_metal(delta)
 
 
 func exit() -> void:
 	player_body.reticle.hide()
 	player_body.steel_lines.hide()
+	player_body.push_arrow.hide()
 
 
 func _throw_coin() -> void:
@@ -79,68 +81,72 @@ func _throw_coin() -> void:
 	player_body.carried_coin.velocity = throw_direction * player_body.THROW_SPEED_PX_PER_S
 
 
-func _push_against_coin(delta: float) -> void:
-	# Where the coin actually is, relative to the player. Everything below is
-	# derived from this one vector -- how hard the push is (distance) AND which
-	# way it points (direction).
-	var coin_offset: Vector2 = player_body.carried_coin.global_position - player_body.global_position
-	var coin_distance_m: float = coin_offset.length() / player_body.PIXELS_PER_METER
-	var falloff: float = max(0.0, 1.0 - coin_distance_m / player_body.MAX_RANGE_M)
+func _push_against_metal(delta: float) -> void:
+	var targets: Array = player_body.find_metal_in_range()
+	if targets.is_empty():
+		return
 
-	# A steelpush is a force pair along the real line joining the two bodies:
-	# the coin is shoved directly away from the player and the player directly
-	# away from the coin. sim/steelpush.py does the same and has no concept of
-	# aim at all -- an Allomancer picks which metal to push, not which direction
-	# to push it, so the reticle never feeds this.
-	var push_direction: Vector2
-	if coin_offset.length() < 0.001:
-		# Coincident player and coin leave no line to push along. Guard only;
-		# a carried coin always rides 13px below the player.
-		push_direction = Vector2.DOWN
-	else:
-		push_direction = coin_offset.normalized()
-	var angle: float = push_direction.angle()
+	var pushes: Array = player_body.compute_pushes(targets, _push_budget_newtons(targets))
+	for push_item in pushes:
+		# Anything that can be moved by a push implements receive_push. Anchored
+		# metal does not, so the push simply fails to move it -- which is what
+		# being anchored means. No check for what kind of thing this is.
+		if push_item.target.has_method("receive_push"):
+			push_item.target.receive_push(push_item.direction, push_item.force_px)
 
-	var strength_n: float
-	if player_body.push_mode == Player.PushMode.STEADY:
-		# Full strength every tick, whatever the distance formula allows. Does
-		# not ease off near the target height, so a hover bobs forever.
-		strength_n = player_body.BASE_PUSH_FORCE
-	else:
-		# PD control ported from hover_pusher.gd's HoverControl: rather than
-		# always pushing at full strength, compute just enough force to
-		# hold the player at the height above the coin where a steady push
-		# would balance gravity, damped by the player's own vertical speed
-		# so it settles instead of bobbing forever. "Height above the coin"
-		# plays the role hover_pusher.gd's fixed Anchor does -- the coin
-		# isn't literally fixed, but while it's caught and resting, it's
-		# close enough to stand in for one.
-		var gravity_m_per_s2: float = player_body.get_gravity().length() / player_body.PIXELS_PER_METER
-		var weight_n: float = player_body.BASE_MASS_KG * gravity_m_per_s2
-		# Same derivation as hover_pusher.gd's equilibrium_height_m: where a
-		# STEADY push would exactly cancel gravity. strength * (1 - d/range)
-		# = m*g, solved for d.
-		var equilibrium_height_m: float = player_body.MAX_RANGE_M * (1.0 - weight_n / player_body.BASE_PUSH_FORCE)
-		var height_above_coin_m: float = coin_offset.y / player_body.PIXELS_PER_METER
-		var height_error_m: float = equilibrium_height_m - height_above_coin_m
-		var vertical_speed_m_per_s: float = -player_body.velocity.y / player_body.PIXELS_PER_METER
-		var desired_force_n: float = (weight_n
-			+ HEIGHT_GAIN_N_PER_M * height_error_m
-			- SPEED_GAIN_N_PER_M_PER_S * vertical_speed_m_per_s)
-		# max(falloff, small number) guards the division as distance
-		# approaches MAX_RANGE_M -- clamp() below would cap a huge or
-		# infinite result anyway, this just keeps the intermediate value
-		# from ever reading as infinity.
-		strength_n = clamp(desired_force_n / max(falloff, 0.0001), 0.0, MAX_CONTROLLED_STRENGTH_N)
-		# Limitation: this asks how much UPWARD force is needed, but applies it
-		# along push_direction, which only points straight up when the coin sits
-		# directly below. Off to one side it under-lifts and swings.
+	# The player's half of every force pair, summed. Targets on opposite sides
+	# cancel here, which is the whole reason the arrow is worth drawing.
+	var net_force: Vector2 = player_body.net_push_on_player(pushes)
+	player_body.pending_recoil += net_force / player_body.BASE_MASS_KG * delta
 
-	var force: float = strength_n * falloff * player_body.PIXELS_PER_METER
-	# Newton's third law: the coin goes one way along the line, the player goes
-	# the other. Same magnitude, divided by the player's much larger mass.
-	var recoil: Vector2 = -push_direction * force / player_body.BASE_MASS_KG * delta
 	var mode_text: String = "steady" if player_body.push_mode == Player.PushMode.STEADY else "active_control"
-	player_body.debug_log.store_line("[coin_shoot] mode=" + mode_text + " angle=" + str(angle) + " coin_distance_m=" + str(coin_distance_m) + " force=" + str(force) + " coin_global_pos=" + str(player_body.carried_coin.global_position) + " coin_velocity=" + str(player_body.carried_coin.velocity))
-	player_body.push.emit(angle, force)
-	player_body.pending_recoil += recoil
+	player_body.debug_log.store_line("[coin_shoot] mode=" + mode_text
+		+ " targets=" + str(targets.size())
+		+ " net_force=" + str(net_force)
+		+ " net_magnitude=" + str(net_force.length()))
+
+
+func _push_budget_newtons(targets: Array) -> float:
+	# How strong the whole push is, before it gets divided across targets.
+	if player_body.push_mode == Player.PushMode.STEADY:
+		# Full strength every tick. Does not ease off near the target height, so
+		# a hover bobs like an undamped spring.
+		return player_body.BASE_PUSH_FORCE
+
+	# HoverControl from notebook 15: just enough force to hold a target height,
+	# damped by vertical speed, so a hover settles instead of oscillating.
+	#
+	# The controller was derived for a single anchor directly below the player.
+	# With several targets it uses the NEAREST one as its height reference,
+	# which is a stand-in, not a derivation -- expect it to behave oddly when
+	# pushing off several things at once.
+	var reference: Node2D = _nearest_target(targets)
+	var offset: Vector2 = reference.global_position - player_body.global_position
+	var distance_m: float = offset.length() / player_body.PIXELS_PER_METER
+	var falloff: float = max(0.0, 1.0 - distance_m / player_body.MAX_RANGE_M)
+
+	var gravity_m_per_s2: float = player_body.get_gravity().length() / player_body.PIXELS_PER_METER
+	var weight_n: float = player_body.BASE_MASS_KG * gravity_m_per_s2
+	# Where a STEADY push would exactly cancel gravity: strength * (1 - d/range)
+	# = m*g, solved for d.
+	var equilibrium_height_m: float = player_body.MAX_RANGE_M * (1.0 - weight_n / player_body.BASE_PUSH_FORCE)
+	var height_above_m: float = offset.y / player_body.PIXELS_PER_METER
+	var height_error_m: float = equilibrium_height_m - height_above_m
+	var vertical_speed_m_per_s: float = -player_body.velocity.y / player_body.PIXELS_PER_METER
+	var desired_force_n: float = (weight_n
+		+ HEIGHT_GAIN_N_PER_M * height_error_m
+		- SPEED_GAIN_N_PER_M_PER_S * vertical_speed_m_per_s)
+	# max(falloff, small number) only guards the division as distance approaches
+	# MAX_RANGE_M; clamp() would cap a huge result anyway.
+	return clamp(desired_force_n / max(falloff, 0.0001), 0.0, MAX_CONTROLLED_STRENGTH_N)
+
+
+func _nearest_target(targets: Array) -> Node2D:
+	var nearest: Node2D = targets[0]
+	var nearest_distance: float = player_body.global_position.distance_to(nearest.global_position)
+	for candidate in targets:
+		var distance: float = player_body.global_position.distance_to(candidate.global_position)
+		if distance < nearest_distance:
+			nearest = candidate
+			nearest_distance = distance
+	return nearest

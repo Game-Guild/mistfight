@@ -109,8 +109,8 @@ func _physics_process(delta: float) -> void:
 	if is_carried:
 		return
 	# Gravity, then move. Any steelpush force arriving this tick has already
-	# been folded into velocity by _on_character_body_2d_push below, which runs
-	# from the player's own _physics_process.
+	# been folded into velocity by receive_push() below, which runs from the
+	# player's own _physics_process.
 	velocity += get_gravity() * delta
 	_move_by_sweeping(delta)
 
@@ -201,10 +201,14 @@ func _respond_to_collision(collision: KinematicCollision2D, delta: float) -> voi
 # out in coin_shoot_state.gd -- so a pinned coin still throws the player the
 # full launch, as sim/steelpush.py describes.
 
-func _on_character_body_2d_push(angle: float, force: float) -> void:
-	# `angle` points from the player to this coin, so pushing along it shoves
-	# the coin directly away from the player.
-	var coin_push: Vector2 = Vector2.from_angle(angle) * force
+func receive_push(direction: Vector2, force: float) -> void:
+	# Any pusher can call this; nothing is wired to one particular player. A
+	# body that does not implement it simply cannot be moved by a push, which is
+	# what makes anchored metal anchored -- no type check needed.
+	#
+	# `direction` points from the pusher toward this coin, so pushing along it
+	# shoves the coin directly away from them.
+	var coin_push: Vector2 = direction * force
 	var push_delta: float = get_physics_process_delta_time()
 	var surface_normal: Vector2 = _find_surface_being_pushed_into(coin_push)
 
