@@ -11,6 +11,14 @@ var player_body: Player
 var state_machine: PlayerStateMachine
 
 
+func is_interruptible() -> bool:
+	# Whether pressing another action button can pull the player out of this
+	# state before it has finished. States that commit to an animation override
+	# this and return false, so a swing plays out instead of being cancelled
+	# halfway. Player._physics_process checks it before any entry trigger.
+	return true
+
+
 func enter(_previous_state_name: String) -> void:
 	pass
 

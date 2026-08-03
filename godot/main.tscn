@@ -209,7 +209,7 @@ animations = [{
 "duration": 1.0,
 "texture": SubResource("AtlasTexture_2cqfq")
 }],
-"loop": 1,
+"loop": 0,
 "name": &"HURT",
 "speed": 5.0
 }, {
@@ -405,11 +405,7 @@ default_color = Color(1, 1, 0, 1)
 [node name="Coin" type="RigidBody2D" parent="." unique_id=494870156]
 position = Vector2(24, 248)
 mass = 0.03
-physics_material_override = SubResource("PhysicsMaterial_coinfriction")
 freeze = true
-continuous_cd = 1
-contact_monitor = true
-max_contacts_reported = 4
 script = ExtResource("7_272bh")
 
 [node name="Polygon2D" type="Polygon2D" parent="Coin" unique_id=681706153]

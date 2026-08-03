@@ -6,5 +6,11 @@ extends PlayerState
 # see player.gd.
 
 
+func is_interruptible() -> bool:
+	# A swing commits. Without this, mashing the attack key restarts the
+	# animation from frame one every press and it never lands.
+	return false
+
+
 func enter(_previous_state_name: String) -> void:
 	player_body.animated_sprite.play("ATTACK 1")

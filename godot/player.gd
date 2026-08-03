@@ -76,17 +76,11 @@ func _physics_process(delta: float) -> void:
 	if coin.is_carried:
 		coin.global_position = global_position + Vector2(0, 13)
 
-	# None of these look at what state is active beyond guarding against
-	# re-entering themselves, so Jump, Attack and CoinTarget can interrupt
-	# almost anything. Narrowing that is issue #7.
-	if Input.is_action_just_pressed("jump") and is_on_floor() and state_machine.current_state.name != "Jump":
-		state_machine.transition_to("Jump")
-	if Input.is_action_just_pressed("attack"):
-		state_machine.transition_to("Attack")
-	if Input.is_action_just_pressed("coin_target"):
-		state_machine.transition_to("CoinTarget")
-	if Input.is_action_just_pressed("coin_shoot") and state_machine.current_state.name != "CoinShoot":
-		state_machine.transition_to("CoinShoot")
+	# States that commit to an animation -- Attack, Hurt -- refuse every entry
+	# trigger below until they finish. Everything else can be acted out of
+	# freely, so you can still jump or attack out of a push.
+	if state_machine.current_state.is_interruptible():
+		_poll_state_entry_inputs()
 
 	# Both toggles are polled here, unconditionally, so they respond whatever
 	# state you happen to be in.
@@ -116,6 +110,21 @@ func _physics_process(delta: float) -> void:
 	velocity += pending_recoil
 
 	move_and_slide()
+
+
+func _poll_state_entry_inputs() -> void:
+	# Each check guards only against re-entering the state it is already in;
+	# whether the CURRENT state will tolerate being left at all is decided by
+	# the caller, which asks it.
+	var current_state_name: String = state_machine.current_state.name
+	if Input.is_action_just_pressed("jump") and is_on_floor() and current_state_name != "Jump":
+		state_machine.transition_to("Jump")
+	if Input.is_action_just_pressed("attack"):
+		state_machine.transition_to("Attack")
+	if Input.is_action_just_pressed("coin_target") and current_state_name != "CoinTarget":
+		state_machine.transition_to("CoinTarget")
+	if Input.is_action_just_pressed("coin_shoot") and current_state_name != "CoinShoot":
+		state_machine.transition_to("CoinShoot")
 
 
 func _apply_ground_movement() -> void:
