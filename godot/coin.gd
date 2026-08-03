@@ -1,103 +1,59 @@
 extends RigidBody2D
 
-# The coin.
+# The coin moves itself. It stays a RigidBody2D node so the scene keeps its
+# mass and signal wiring, but it is frozen kinematic, so Godot's solver never
+# touches it -- every pixel it travels is moved by the code below.
 #
-# The coin drives itself. Godot's rigid body solver never moves it: the node
-# stays a RigidBody2D so the scene, its mass, and the push signal connection
-# all keep working, but it is frozen in kinematic mode from _ready() onward,
-# which tells the solver to keep its hands off. Every pixel the coin travels is
-# moved by the code below.
+# A solver decides collisions from where a body is at the start and end of a
+# tick. A steelpush accelerates this 0.03 kg coin at ~6.6 million px/s^2, fast
+# enough to cross hundreds of pixels between those two snapshots, so a wall it
+# should have hit appears in neither and it passes through. Instead the coin is
+# swept: move_and_collide() drags its shape along the entire path it means to
+# travel and stops it at the first thing in the way. That behaves identically
+# at any speed.
 #
-# Why, in one paragraph. A solver figures out collisions by comparing where
-# things are at the start and end of a tick. A steelpush pushes a 0.03 kg coin
-# at roughly 6.6 million pixels per second squared, which at 240 ticks a second
-# means the coin can cross 400+ pixels between one snapshot and the next -- so
-# a wall it should have hit is in neither snapshot, and it sails through. That
-# is not a Godot flaw, it is what discrete-time simulation is, and it is why no
-# engine simulates bullets as rigid bodies. The standard answer everywhere is
-# to sweep: each tick, drag the shape along the whole line it means to travel
-# and stop it at the first thing in the way. move_and_collide() does exactly
-# that, and it behaves the same at 5 pixels a second as at 90,000.
-#
-# Measured on 2026-08-02, the failures this replaces: contact reporting that
-# read zero contacts for three ticks running while the coin sat inside the
-# floor; position moving 15 pixels on a tick where velocity claimed a quarter
-# of a pixel; and a coin leaving at 7,800 px/s in a direction the push never
-# pointed. Godot's CCD does not cover this either -- Cast Ray only stops the
-# skip-over, and Cast Shape is a known open engine bug in 2D
-# (godotengine/godot#72674) that does nothing at all.
-#
-# What this gives up: Godot no longer resolves coin-versus-coin contact, so a
-# pile of coins resting on each other is not modelled. Nothing in the game has
-# more than one coin yet. The Python sim in sim/ has never modelled coin
-# rotation either, so no tumbling behaviour is being lost here that existed
-# anywhere else.
+# Trade-off: Godot no longer resolves coin-against-coin contact, so a pile of
+# coins is not modelled. The sim has never modelled coin rotation either.
 
 
 # --- Tunable numbers ---------------------------------------------------------
 
-# Coulomb friction, taken from sim/bodies.py line 15 rather than picked here.
-# 0.6 static is the number behind this project's stated critical Coinshot angle.
-#
-# Getting that angle the right way round matters, because there are two ways to
-# measure it and they are not the same number:
-#
-#   measured from the surface's NORMAL (the direction sticking straight out of
-#   it): grip holds while tan(angle) <= 0.6, so up to 31 degrees.
-#   measured from the SURFACE ITSELF (lying flat along it): the same limit is
-#   59 degrees, because 90 - 31 = 59. This is the "critical Coinshot angle"
-#   written down in the project's canon notes as tan(theta) = 1 / 0.6.
-#
-# Both describe the same rule. Push steeply into a surface and the coin grips.
-# Push at a glancing angle and it skids away. The changeover is 31 degrees off
-# straight-on, which is a good deal narrower than "59 degrees" makes it sound.
+# Coulomb friction, matching sim/bodies.py. Push within 31 degrees of a
+# surface's normal and the coin grips; anything shallower skids it. That is the
+# project's critical Coinshot angle, which is the same limit measured from the
+# surface instead of its normal: 90 - 31 = 59 degrees.
 const FRICTION_STATIC = 0.6
 const FRICTION_KINETIC = 0.4
 
-# How bouncy an impact is, from 0 (stops dead, all the energy gone) to 1
-# (perfectly elastic, bounces back as fast as it arrived). Left at 0 on purpose
-# so this change does not quietly alter how the coin behaves: main.tscn's
-# physics material never set a bounce value either, so zero is what the coin
-# has always done. Raise it if a skittering coin turns out to feel better.
+# How bouncy an impact is: 0 stops dead, 1 rebounds as fast as it arrived.
 const BOUNCE = 0.0
 
-# How far ahead of the coin to look for something solid when deciding whether a
-# push is being blocked. The coin's collision box is 1x3 px, so its centre sits
-# about 2 px from its bottom edge; 6 px reaches past that with margin and is
-# short enough to only ever find a surface it is genuinely touching.
+# How far ahead to look for something solid when deciding whether a push is
+# blocked. The coin's box is 1x3 px, so its centre sits ~2 px from its edge; 6
+# px clears that and is short enough to only find surfaces it is touching.
 const CONTACT_PROBE_DISTANCE_PX = 6.0
 
-# Below this sliding speed the coin counts as sitting still, which is what lets
-# static grip take hold. sim/world.py makes the same test with its own
-# STATIC_SPEED_EPSILON_M_PER_S; this is that idea in pixels, loose enough to
-# survive the small numerical jitter any resting body has.
+# Below this sliding speed the coin counts as sitting still, so static grip can
+# take hold. Same test as sim/world.py's STATIC_SPEED_EPSILON_M_PER_S.
 const RESTING_SPEED_PX_PER_S = 1.0
 
-# How many times in one tick the coin is allowed to hit something, redirect,
-# and keep going with whatever travel it had left. Without this a coin wedged
-# in a corner could ping between two walls forever inside a single tick. Four
-# is enough for a corner plus slack, and cheap.
+# How many times in one tick the coin may hit something, redirect, and carry on
+# with its leftover travel. Caps a coin wedged in a corner from looping forever.
 const MAX_SWEEP_STEPS = 4
 
-# How many points of flight path the yellow trail keeps. A coin moving at
-# bullet speed covers most of a screen in a couple of frames, so a few hundred
-# points is already a longer trail than fits on screen, and keeping more only
-# costs performance nobody sees. See _process() for why an uncapped trail is
-# actively harmful rather than merely wasteful.
+# How many points of flight path the yellow trail keeps. The whole array is
+# copied every frame, so an uncapped trail gets slower the longer it gets.
 const MAX_TRACE_POINTS = 300
 
 
 # --- State -------------------------------------------------------------------
 
-# The coin's own velocity, in pixels per second. This replaces the RigidBody2D
-# property linear_velocity, which is inert while the body is frozen. Anything
-# that used to read coin.linear_velocity should read coin.velocity now.
+# The coin's velocity in pixels per second. Used instead of the RigidBody2D
+# property linear_velocity, which is inert while the body is frozen.
 var velocity: Vector2 = Vector2.ZERO
 
-# True while the coin is riding along on the player, not yet released. While
-# this is set, player.gd owns the coin's position and nothing here moves it.
-# This replaces the old use of the `freeze` flag to mean "carried" -- freeze
-# now means "the solver does not move this body", which is true permanently.
+# True while the coin is riding on the player. player.gd owns its position for
+# as long as this is set, and nothing in this file moves it.
 var is_carried: bool = true
 
 var debug_log: FileAccess
@@ -105,11 +61,9 @@ var debug_log: FileAccess
 
 func _ready() -> void:
 	debug_log = FileAccess.open("res://coin_debug.log", FileAccess.WRITE)
-	# Hand the body to ourselves, permanently. FREEZE_MODE_KINEMATIC means the
-	# body still exists to the physics world -- other things collide with it,
-	# rays find it -- but the solver never integrates it or moves it. Setting
-	# this in code rather than in main.tscn keeps the reason next to the
-	# explanation of why.
+	# FREEZE_MODE_KINEMATIC leaves the body present to the physics world --
+	# things still collide with it and rays still find it -- but the solver
+	# never integrates or moves it.
 	freeze = true
 	freeze_mode = RigidBody2D.FREEZE_MODE_KINEMATIC
 
@@ -121,14 +75,9 @@ func release() -> void:
 
 
 func recall() -> void:
-	# Snap the coin back into the player's hand from wherever it ended up.
-	#
-	# This is a TESTING AFFORDANCE, not a designed mechanic, and it should not
-	# survive into anything anyone plays. There is exactly one coin in the
-	# scene and no way to pick it up, so without this you get one throw per
-	# launch of the game. Real coin handling -- a supply you carry, spend, and
-	# retrieve -- is issue #5, and this is a placeholder standing where that
-	# will go.
+	# Snap the coin back to the player's hand from wherever it ended up.
+	# Testing affordance, not a mechanic: there is one coin and no way to pick
+	# it up. Real coin handling is issue #5.
 	is_carried = true
 	velocity = Vector2.ZERO
 	$"../TrajectoryTrace".points = PackedVector2Array()
@@ -150,13 +99,8 @@ func _process(_delta: float) -> void:
 		var trace_points: PackedVector2Array = $"../TrajectoryTrace".points
 		trace_points.append(global_position)
 		if trace_points.size() > MAX_TRACE_POINTS:
-			# Drop the oldest point so the trail is a moving window over the
-			# recent path rather than the entire history. Without this the array
-			# grows without limit, and since the whole thing is copied out and
-			# back every single frame, the cost of drawing it climbs with its
-			# own length. Measured 2026-08-02: an uncapped trail stalled a
-			# 40-second headless run so badly it had to be killed, while the
-			# same run with a short flight finished in 3 seconds.
+			# Drop the oldest point, making the trail a moving window over the
+			# recent path rather than the whole history.
 			trace_points.remove_at(0)
 		$"../TrajectoryTrace".points = trace_points
 
@@ -196,9 +140,8 @@ func _move_by_sweeping(delta: float) -> void:
 
 
 func _respond_to_collision(collision: KinematicCollision2D, delta: float) -> void:
-	# move_and_collide() only reports. It stopped the coin at the surface and
-	# handed back the facts; deciding what the impact MEANS is this function's
-	# job and nothing else does it.
+	# move_and_collide() only reports: it stopped the coin at the surface and
+	# handed back the facts. Deciding what the impact means happens here.
 	var surface_normal: Vector2 = collision.get_normal()
 
 	# Split the coin's speed into the part heading into the surface and the
@@ -228,10 +171,9 @@ func _respond_to_collision(collision: KinematicCollision2D, delta: float) -> voi
 	elif sliding_speed > 0.0:
 		velocity -= velocity_along_surface.normalized() * friction_slowdown
 
-	# Tell whatever got hit that it got hit. Nothing implements this yet -- no
-	# health system exists -- so this is the single door for damage, breaking,
-	# and knocking things over to come through later, rather than the coin
-	# growing a list of special cases for each kind of target.
+	# The single door for damage, breaking and knockback to come through, so the
+	# coin never grows a list of special cases per target. Nothing implements it
+	# yet.
 	var thing_hit: Object = collision.get_collider()
 	var thing_hit_name: String = "nothing"
 	if thing_hit is Node:
@@ -246,29 +188,18 @@ func _respond_to_collision(collision: KinematicCollision2D, delta: float) -> voi
 
 # --- Receiving a steelpush ----------------------------------------------------
 #
-# Two cases.
+# Touching nothing: the whole push becomes acceleration and the coin flies.
 #
-# NOT PRESSED AGAINST ANYTHING: the whole push becomes acceleration. The coin
-# flies, and the sweep above makes sure it cannot pass through anything on the
-# way, however fast it goes.
+# Pressed against something solid: the push is split against that surface. The
+# part aimed into it is dropped, because solid ground cancels it. The part
+# aimed along it is kept, less friction, so a shallow push skids the coin
+# sideways. Grip or skid follows sim/world.py: static grip holds while the
+# sideways force stays under friction_static * normal_force, and the normal
+# force includes the push, so a coin pressed harder grips harder.
 #
-# PRESSED AGAINST SOMETHING SOLID: the push gets split against that surface.
-#   - the part aimed INTO the surface is dropped. Solid ground cancels it, which
-#     is what solid ground does.
-#   - the part aimed ALONG the surface is kept, less friction. That is the coin
-#     skidding, and it is wanted: a push at a shallow angle should shove a coin
-#     sideways, which is what makes a tripod of coins mean anything.
-# Whether it grips or skids is sim/world.py's rule (lines 93-109): static grip
-# holds while the sideways force stays under friction_static * normal_force,
-# and past that the coin breaks loose and only weaker kinetic friction resists.
-# The normal force includes the push itself, so a coin pressed harder grips
-# harder.
-#
-# The player's half of the force pair is untouched by any of this. It is worked
-# out separately in player_states/coin_shoot_state.gd and never passes through
-# here, so a coin pinned against the ground still throws the player the full
-# launch -- exactly what sim/steelpush.py describes: "a coin pinned against the
-# ground cannot move, so the pusher takes the full launch."
+# The player's half of the force pair never passes through here -- it is worked
+# out in coin_shoot_state.gd -- so a pinned coin still throws the player the
+# full launch, as sim/steelpush.py describes.
 
 func _on_character_body_2d_push(angle: float, force: float) -> void:
 	# `angle` points from the player to this coin, so pushing along it shoves
@@ -326,11 +257,9 @@ func _find_surface_being_pushed_into(coin_push: Vector2) -> Vector2:
 	# Look a short way along the push direction for something solid and report
 	# the angle of whatever is found, or Vector2.ZERO for "nothing there".
 	#
-	# We ask the physics world ourselves with a ray rather than reading Godot's
-	# own contact report, because that report was measured on 2026-08-02 to be
-	# untrustworthy under a push this size: it read zero contacts for three
-	# ticks running while the coin was demonstrably inside the floor. A ray is a
-	# direct geometric question with a direct answer.
+	# A ray rather than Godot's own contact report, which is unreliable under a
+	# push this size -- it reads zero contacts while the coin sits inside a
+	# surface. A ray is a direct geometric question with a direct answer.
 	if coin_push.length() < 0.0001:
 		return Vector2.ZERO
 	var space_state: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state

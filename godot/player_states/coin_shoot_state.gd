@@ -1,54 +1,28 @@
 extends PlayerState
 
-# Which push mode is active is NOT stored here. It lives on Player, alongside
-# the other whole-game toggles, because the C key that changes it has to work
-# whether or not a push is currently happening. It used to be a variable on
-# this state polled from this state's physics_process, which meant the key only
-# ever did anything during the fraction of a second you were mid-push -- that
-# was issue #13.
+# Which push mode is active lives on Player, not here, so the key that changes
+# it works in any state rather than only mid-push.
 
-# Notebook 15 cell 7's HoverControl gains (notebooks/15_the_coinshot_hover.ipynb),
-# reused as-is from hover_pusher.gd's reproduction of that experiment --
-# same validated tuning, not reinvented here. Shape being tested: pull
-# toward the target height, oppose vertical speed, clamp to a finite push
-# (steel pushes, never pulls).
+# HoverControl gains from notebook 15 (notebooks/15_the_coinshot_hover.ipynb),
+# reused as-is: pull toward the target height, oppose vertical speed, clamp to a
+# finite push, since steel pushes and never pulls.
 const HEIGHT_GAIN_N_PER_M = 2000.0
 const SPEED_GAIN_N_PER_M_PER_S = 2200.0
 const MAX_CONTROLLED_STRENGTH_N = 8000.0
 
-# --- The windup, and how to abandon it ----------------------------------------
+# How long the throw takes before the push engages. A carried coin sits 13 px
+# below the player, so the push line points almost straight down and is ~150x
+# stronger than the flick -- with no pause the coin is driven into the ground at
+# your feet and aiming does nothing. 0.1s at 1500 px/s carries the coin 150 px
+# clear, by which point the line to it is within ~8 degrees of where you aimed.
 #
-# After the coin is flicked out of your hand, the push waits this long before
-# it engages. A tenth of a second.
-#
-# Why it has to wait at all. A carried coin sits 13 pixels below the player, so
-# the line between the two points almost straight down, and the push acts along
-# that line. Measured 2026-08-02: on the very first tick after a throw, the
-# flick contributed 702 px/s sideways and the push contributed 108,882 px/s
-# downward -- 155 times more. Without a pause the push wins instantly, the coin
-# is slammed into the ground at your feet, and which way you aimed makes no
-# difference at all. The flick needs a moment to carry the coin clear before
-# there is a meaningful direction to push along. At 1500 px/s a tenth of a
-# second puts the coin 150 pixels out, by which point the line to it is within
-# about 8 degrees of where you aimed.
-#
-# What this costs, stated plainly: it is a rule about how Allomancy works that
-# is not in the books, and sim/steelpush.py has no equivalent. A push there
-# acts at any distance, right down to zero. Elliott chose it 2026-08-03 with
-# the fallback below written in deliberately.
-#
-# IF IT FEELS WRONG, the fallback is separate buttons -- one to throw, one to
-# push -- which invents nothing. To switch:
-#   1. set THROW_WINDUP_SECONDS to 0.0
-#   2. move the _throw_coin() call out of enter() and onto its own input action
-#      polled in player.gd, next to the coin.recall() line
-# CoinShoot then only ever pushes what is already out in the world, which is
-# what it did before any of this, and no waiting rule exists anywhere.
+# Alternative if this feels wrong: separate throw and push buttons. Set this to
+# 0.0 and move the _throw_coin() call out of enter() onto its own input action
+# polled in player.gd.
 const THROW_WINDUP_SECONDS = 0.1
 
-# Seconds since the coin left the hand this time round. Starts already past the
-# windup when there was no throw -- pushing a coin that is lying on the ground
-# has nothing to wait for.
+# Seconds since the coin left the hand. Starts past the windup when nothing was
+# thrown, since pushing a coin already on the ground waits for nothing.
 var seconds_since_throw: float = 0.0
 
 
@@ -64,12 +38,8 @@ func enter(_previous_state_name: String) -> void:
 		# Nothing was thrown, so there is nothing to wait for. Start the clock
 		# already past the windup and the push engages on the first tick.
 		seconds_since_throw = THROW_WINDUP_SECONDS
-	# Keep the blue Steel line up while the push is actually happening. It used
-	# to vanish the instant you left CoinTarget, which meant it was only ever
-	# visible while holding the aim key and never during the push itself --
-	# the one moment you most want to see the line the force is acting along.
-	# The reticle stays hidden: it points where you would flick a coin, and no
-	# flick is happening mid-push.
+	# The Steel line stays up through the push, since that is when you most want
+	# to see the line the force acts along. The reticle stays hidden.
 	player_body.steel_line.show()
 
 
@@ -80,14 +50,9 @@ func physics_process(delta: float) -> void:
 
 	seconds_since_throw += delta
 	if seconds_since_throw < THROW_WINDUP_SECONDS:
-		# Mid-windup. The coin is flying on the flick alone and no push is
-		# applied yet, which also means no recoil -- you do not get launched
-		# during the throw itself.
-		#
-		# Worth knowing while playing: because the windup runs on held input,
-		# TAPPING this key gives a pure throw with no push at all, and HOLDING
-		# it gives throw-then-push. Both behaviours out of one button, without
-		# either being written as a special case.
+		# Mid-windup: the coin flies on the flick alone, no push and so no
+		# recoil. Since this runs on held input, tapping the key gives a pure
+		# throw and holding it gives throw-then-push.
 		player_body.update_steel_line_to_coin()
 		return
 
@@ -100,17 +65,12 @@ func exit() -> void:
 
 
 func _throw_coin() -> void:
-	# A Coinshot does not push a coin straight out of their own hand. They flick
-	# or drop it first, and then push what is already in the air -- because a
-	# push can only ever act along the line between the two bodies, so a coin
-	# held against your chest can only be shoved straight down at your feet.
-	# The flick is what decides which direction the coin sets off in; the push
-	# takes over from there and does all the real work.
+	# A push acts along the line between the two bodies, so a coin held against
+	# your chest can only be shoved at your feet. The flick sets which direction
+	# it leaves in; the push takes over from there.
 	#
-	# Direction comes from where the mouse is RIGHT NOW rather than from the
-	# reticle's stored position, so throwing works whether or not you were
-	# holding the aim key first. The reticle is the picture of this; the mouse
-	# is the thing itself.
+	# Direction is read from the mouse now rather than the reticle's stored
+	# position, so throwing works whether or not the aim key was held first.
 	var throw_direction: Vector2 = player_body.get_local_mouse_position().normalized()
 	if throw_direction == Vector2.ZERO:
 		# Mouse sitting exactly on the player leaves no direction to throw in.
@@ -128,35 +88,15 @@ func _push_against_coin(delta: float) -> void:
 	var coin_distance_m: float = coin_offset.length() / player_body.PIXELS_PER_METER
 	var falloff: float = max(0.0, 1.0 - coin_distance_m / player_body.MAX_RANGE_M)
 
-	# The push points along the real line joining the two bodies. A Steelpush
-	# is a force PAIR along that line -- the coin is shoved directly away from
-	# the player, the player directly away from the coin, equal and opposite.
-	# sim/steelpush.py does exactly this and has no concept of "aim" at all:
-	#   offset = self.pusher.position - target.position
-	#   direction_to_pusher = offset / distance
-	# An Allomancer picks WHICH metal to push and where on it to push. They
-	# cannot push it in a direction unrelated to where the metal is.
-	#
-	# This line used to read `player_body.reticle.position.angle()` -- the
-	# reticle's aim direction -- which broke in two separate ways:
-	#   1. Aim somewhere the coin is NOT and the coin flew that way anyway.
-	#   2. Even as an aim reading it was wrong. coin_target_state.gd builds
-	#      the reticle position as (mouse direction * 20px) + (0, offset_y),
-	#      where offset_y is the sprite's visible center -- measured at 16px
-	#      for the IDLE frames. Taking .angle() of that sum bakes the sprite
-	#      offset into the direction: aiming dead horizontal produced the
-	#      vector (20, 16), which is 38.7 degrees BELOW horizontal.
-	# Deriving direction from coin_offset removes both problems at once,
-	# because the reticle stops feeding the physics entirely.
+	# A steelpush is a force pair along the real line joining the two bodies:
+	# the coin is shoved directly away from the player and the player directly
+	# away from the coin. sim/steelpush.py does the same and has no concept of
+	# aim at all -- an Allomancer picks which metal to push, not which direction
+	# to push it, so the reticle never feeds this.
 	var push_direction: Vector2
 	if coin_offset.length() < 0.001:
-		# Player and coin occupying the same point has no "line between them"
-		# to push along. sim/steelpush.py hits the same degenerate case and
-		# resolves it by pushing the pusher straight up; the equivalent here is
-		# shoving the coin straight down, since our direction points at the
-		# coin and the recoil is its opposite. Should never happen in practice
-		# (a carried coin rides 13px below the player) -- this is a guard, not
-		# a behavior anyone is meant to see.
+		# Coincident player and coin leave no line to push along. Guard only;
+		# a carried coin always rides 13px below the player.
 		push_direction = Vector2.DOWN
 	else:
 		push_direction = coin_offset.normalized()
@@ -164,10 +104,8 @@ func _push_against_coin(delta: float) -> void:
 
 	var strength_n: float
 	if player_body.push_mode == Player.PushMode.STEADY:
-		# The original behavior: full strength every tick, whatever the
-		# formula allows at this distance. Simple, and exactly what made
-		# the coin explosively hard to hold in place -- full force doesn't
-		# ease off just because you're already where you want to be.
+		# Full strength every tick, whatever the distance formula allows. Does
+		# not ease off near the target height, so a hover bobs forever.
 		strength_n = player_body.BASE_PUSH_FORCE
 	else:
 		# PD control ported from hover_pusher.gd's HoverControl: rather than
@@ -195,14 +133,9 @@ func _push_against_coin(delta: float) -> void:
 		# infinite result anyway, this just keeps the intermediate value
 		# from ever reading as infinity.
 		strength_n = clamp(desired_force_n / max(falloff, 0.0001), 0.0, MAX_CONTROLLED_STRENGTH_N)
-		# Known limitation, stated rather than patched: every line above asks
-		# "how much UPWARD force do I need", but the force is then applied
-		# along push_direction, which only points straight up when the coin is
-		# directly below the player. Stand off to one side and the upward part
-		# of the push is only cos(lean angle) of what the controller asked
-		# for, so it under-lifts and swings. That is arguably the honest
-		# outcome -- you genuinely cannot hover cleanly off a coin that is not
-		# under you -- so it is left alone until playtesting says otherwise.
+		# Limitation: this asks how much UPWARD force is needed, but applies it
+		# along push_direction, which only points straight up when the coin sits
+		# directly below. Off to one side it under-lifts and swings.
 
 	var force: float = strength_n * falloff * player_body.PIXELS_PER_METER
 	# Newton's third law: the coin goes one way along the line, the player goes

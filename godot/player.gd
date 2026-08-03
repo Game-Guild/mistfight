@@ -5,41 +5,16 @@ extends CharacterBody2D
 const SPEED = 300.0
 const JUMP_VELOCITY = -400.0
 
-# How fast a coin leaves your hand when you flick it, in pixels per second.
-# 1500 px/s is 15 metres per second at this project's 100 pixels to the metre,
-# or about 34 miles per hour -- a hard flick, well short of a thrown baseball
-# (roughly 40 m/s from a professional pitcher).
-#
-# Stated modelling choice, not canon: the books describe Coinshots flicking or
-# dropping a coin and then pushing it, but never say how hard the flick is.
-# What matters mechanically is only that it clears your hand -- the steelpush
-# does all the real work from there, and reaches thousands of metres per second
-# on its own. This number just decides which way the coin is heading when the
-# push takes over.
+# How fast a coin leaves your hand when flicked. 1500 px/s is 15 m/s at this
+# project's 100 pixels to the metre, about 34 mph -- a hard flick, well short of
+# a thrown baseball (~40 m/s). It only has to clear your hand; the push does the
+# real work from there.
 const THROW_SPEED_PX_PER_S = 1500.0
-# The total strength of a Steelpush, in newtons. Was a fixed 2000.0, matching
-# sim/steelpush.py and notebook 15 exactly. Made adjustable from the inspector
-# (select the Player node, look under "Player") so this can be tuned by hand
-# without a code change -- lowered here to 1000 to test whether the coin is
-# simply being pushed too hard to stay inside the level.
-#
-# Useful landmarks when turning this dial, all worked out from the numbers
-# already in this file (80 kg player, gravity 9.81 m/s^2, max range 16 m):
-#
-#   below ~793 : the push is weaker than the player's own weight (785 N), so
-#                you never leave the ground at all
-#          850 : hovers, but only about 1.2 m above the coin
-#         1000 : hovers about 3.4 m up
-#         2000 : hovers about 9.7 m up  (the original value)
-#
-# Warning worth reading before spending time here: BOTH halves of the push use
-# this one number, because a Steelpush is a force pair -- the same strength
-# that shoves the coin is what lifts the player. The coin weighs 0.03 kg and
-# the player weighs 80 kg, so the coin always gets 2,667 times the acceleration
-# no matter what this is set to. Halving it halves both sides equally, which
-# means there is no value that is gentle on the coin and still strong enough to
-# lift a person. The whole range that keeps hovering working (roughly 850 to
-# 2000) still accelerates the coin by millions of pixels per second squared.
+# Total strength of a Steelpush, in newtons. Matches sim/steelpush.py and
+# notebook 15. Both halves of the force pair use it -- the same strength that
+# shoves the coin is what lifts the player -- so lowering it weakens the hover
+# as much as the shot. Below ~793 N it cannot beat the player's own weight and
+# you never leave the ground; 2000 hovers about 9.7 m above the coin.
 const BASE_PUSH_FORCE: float = 2000.0
 const BASE_MASS_KG = 80.0
 const AIM_RADIUS_PX = 20
@@ -63,34 +38,19 @@ var pending_recoil: Vector2 = Vector2.ZERO
 var debug_log: FileAccess
 
 
-# --- Toggles, both live here on purpose ---------------------------------------
-#
-# These are whole-game settings, not per-state ones, so they are polled every
-# tick from _physics_process below no matter which state is active.
-#
-# The push mode toggle used to live inside coin_shoot_state.gd, which only runs
-# while you are actually mid-push -- so pressing C at any other moment did
-# nothing at all, and the only way to change mode was to change it while
-# already pushing. That was issue #13.
+# Whole-game toggles, polled every tick in _physics_process so they respond in
+# any state rather than only while their own state is running.
 
 # How a held steelpush decides its strength.
-#   STEADY         -- full strength every tick, whatever the distance formula
-#                     allows. Simple, and bobs forever like an undamped spring.
-#   ACTIVE_CONTROL -- notebook 15's HoverControl: compute just enough force to
-#                     hold a target height, damped by your own vertical speed,
-#                     so the hover settles instead of oscillating.
+#   STEADY         -- full strength every tick; bobs like an undamped spring.
+#   ACTIVE_CONTROL -- notebook 15's HoverControl: just enough force to hold a
+#                     target height, damped by vertical speed, so it settles.
 enum PushMode { STEADY, ACTIVE_CONTROL }
 var push_mode: PushMode = PushMode.STEADY
 
-# Whether horizontal speed decays to a stop while you are in midair with no
-# movement key held.
-#   true  -- yes. Ordinary platformer feel: you can brake mid-jump. The default,
-#            and how this game has always played.
-#   false -- no. Once moving sideways in the air you keep going, which is more
-#            physically honest (nothing in midair stops you sideways) but takes
-#            away mid-jump control.
-# Either way, an airborne steelpush is exempt: braking there would delete the
-# recoil drift before it could build. See _apply_ground_movement().
+# Whether horizontal speed decays to a stop in midair with no movement key held.
+# On, you can brake mid-jump. Off, you keep sailing. An airborne steelpush is
+# exempt either way -- see _apply_ground_movement().
 var air_braking_enabled: bool = true
 
 
@@ -112,21 +72,13 @@ func _physics_process(delta: float) -> void:
 	if not is_on_floor():
 		velocity += get_gravity() * delta
 
-	# While the coin is being carried, the player owns its position outright.
-	# This used to test coin.freeze, but freeze now means something different:
-	# the coin is frozen permanently so Godot's solver never moves it, and
-	# coin.gd drives every pixel itself. "Am I still holding it" is its own
-	# flag now (see coin.gd's is_carried).
+	# While carried, the player owns the coin's position outright.
 	if coin.is_carried:
 		coin.global_position = global_position + Vector2(0, 13)
 
-	# These four checks are carried over unchanged from the original
-	# flat-if version of this file: none of them look at what state is
-	# currently active, except each one's own guard against re-triggering
-	# itself. Jump, Attack, and CoinTarget can all interrupt almost any
-	# other state today -- that is existing behavior this refactor
-	# preserved on purpose, not something it changed. See the open issues
-	# tracking whether that should be narrowed.
+	# None of these look at what state is active beyond guarding against
+	# re-entering themselves, so Jump, Attack and CoinTarget can interrupt
+	# almost anything. Narrowing that is issue #7.
 	if Input.is_action_just_pressed("jump") and is_on_floor() and state_machine.current_state.name != "Jump":
 		state_machine.transition_to("Jump")
 	if Input.is_action_just_pressed("attack"):
@@ -140,16 +92,13 @@ func _physics_process(delta: float) -> void:
 	# state you happen to be in.
 	if Input.is_action_just_pressed("toggle_control_mode"):
 		push_mode = PushMode.ACTIVE_CONTROL if push_mode == PushMode.STEADY else PushMode.STEADY
-		# Printed as well as shown on the HUD so there is a second, independent
-		# place to look when a key appears to do nothing. If this line does not
-		# appear in the editor's Output panel, the key press is not reaching the
-		# game at all and no amount of staring at the HUD will show why.
+		# Printed as well as shown on the HUD, so a key that appears to do
+		# nothing can be told apart from a key that is not arriving at all.
 		print("[toggle] push mode -> ", PushMode.keys()[push_mode])
 	if Input.is_action_just_pressed("toggle_air_braking"):
 		air_braking_enabled = not air_braking_enabled
 		print("[toggle] midair braking -> ", "ON" if air_braking_enabled else "OFF")
-	# Testing affordance, not a mechanic -- see coin.gd's recall(). There is one
-	# coin and no way to pick it up, so without this you get one throw per run.
+	# Testing affordance, not a mechanic -- see coin.gd's recall().
 	if Input.is_action_just_pressed("reset_hover"):
 		coin.recall()
 		print("[toggle] coin recalled to hand")
@@ -162,58 +111,38 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity.x = 0
 
-	# Recoil is added after the movement gate above, so a state that locks
-	# velocity.x to 0 (the "else" branch) can never wipe out recoil that a
-	# state produced this same tick. Coin_shoot's push recoil is the only
-	# source of this today, but it's written generally for whatever else
-	# needs it later.
+	# Added after the movement gate above, so a state that locks velocity.x to 0
+	# cannot wipe out recoil produced on the same tick.
 	velocity += pending_recoil
 
 	move_and_slide()
 
 
 func _apply_ground_movement() -> void:
-	# Faithful port of the original movement block: velocity.x updates
-	# whether grounded or airborne, so horizontal control is kept during
-	# Jump or CoinShoot in mid-air.
+	# velocity.x updates whether grounded or airborne, so horizontal control is
+	# kept during Jump or CoinShoot in midair.
 	var direction := Input.get_axis("move_left", "move_right")
 	if direction:
 		velocity.x = direction * SPEED
 	else:
-		# With no input, horizontal speed decays straight to a stop -- on the
-		# ground AND in midair. That is ordinary platformer feel and it is how
-		# jumping has always worked here: you can brake mid-jump. SPEED as the
-		# step size means "stop within one tick", i.e. instantly.
+		# No input: horizontal speed decays to a stop. SPEED as the step size
+		# means it stops within one tick.
 		#
-		# One exception, and only one: while a steelpush is actually happening.
-		# Recoil is added to velocity AFTER this function runs (see
-		# _physics_process), so this line would wipe out all the sideways recoil
-		# built up so far and leave only the single newest tick's worth. At 240
-		# ticks a second that turns real sideways acceleration into a constant
-		# ~10px/s creep, which is why hovering off to one side of the coin used
-		# to give a clean vertical bounce with no drift at all. While airborne
-		# under a push, horizontal speed is left alone so the recoil can build.
-		# Feet on the ground it still decays, because friction is real and you
-		# are standing on it.
+		# Exempt while airborne under a push. Recoil is added to velocity AFTER
+		# this function runs, so decaying here would wipe out everything built up
+		# so far and leave only the newest tick's worth -- turning real sideways
+		# acceleration into a slow creep. On the ground it still decays, since
+		# you are standing on friction.
 		var drifting_from_a_push: bool = (not is_on_floor()
 			and state_machine.current_state.name == "CoinShoot")
-		# Feet on the ground, friction always stops you -- the air_braking
-		# toggle has no say there, because that toggle is about what midair
-		# does, and standing on the floor is not midair.
 		var braking_allowed: bool = is_on_floor() or air_braking_enabled
 		if braking_allowed and not drifting_from_a_push:
 			velocity.x = move_toward(velocity.x, 0, SPEED)
 
-	# The Run/Idle swap below must only ever fire BETWEEN Idle and Run
-	# themselves -- never away from some other move_state (Jump, CoinShoot).
-	# It used to fire unconditionally whenever grounded, which meant
-	# holding coin_shoot while standing still on the ground (true for at
-	# least the first tick of every hover, before the push has lifted you
-	# at all) forced an immediate transition back to Idle, canceling the
-	# push before it ever had a chance to build up -- that's what broke
-	# hovering. Only Idle and Run are allowed to swap into each other here;
-	# every other state manages its own exit condition (Jump watches the
-	# floor itself, CoinShoot/CoinTarget watch their own input release).
+	# Only Idle and Run may swap into each other here. Firing this from any
+	# other move_state would yank you out of it -- holding coin_shoot while
+	# standing still would snap back to Idle and cancel the push before it
+	# built up. Every other state manages its own exit condition.
 	if not is_on_floor():
 		return
 	var current_state_name: String = state_machine.current_state.name
@@ -237,20 +166,10 @@ func compute_animation_offset_y() -> float:
 
 
 func update_steel_line_to_coin() -> void:
-	# The blue line an Allomancer sees to nearby metal. It now runs from the
-	# player to where the coin ACTUALLY is -- the same line the push force acts
-	# along in coin_shoot_state.gd -- so what you see on screen and what the
-	# physics does are one thing, and cannot drift apart.
-	#
-	# It used to be drawn to the Reticle instead. The Reticle is an aim
-	# direction clamped to a 20px radius: it carried no information about where
-	# the coin was or how far away, and pointed somewhere else entirely the
-	# moment you aimed away from the coin.
-	#
-	# Both ends are in the player's own local coordinates, because "Steel line"
-	# is a child of Player. Vector2.ZERO is the player's own origin -- the
-	# exact point coin_offset is measured from -- and to_local() converts the
-	# coin's position in the world into that same local frame.
+	# The blue line an Allomancer sees to nearby metal, drawn along the same
+	# line the push force acts on, so the picture and the physics cannot drift
+	# apart. Both ends are in the player's local space, since "Steel line" is a
+	# child of Player: Vector2.ZERO is the point coin_offset is measured from.
 	steel_line.points = [Vector2.ZERO, to_local(coin.global_position)]
 
 
@@ -266,9 +185,8 @@ func _on_animated_sprite_2d_animation_finished() -> void:
 
 
 func _update_toggle_readout() -> void:
-	# One HUD line per toggle, always showing the live value. Rebuilt every tick
-	# rather than only when something changes -- it is two string joins, and it
-	# means the display can never fall out of step with the actual setting.
+	# Rebuilt every tick rather than on change, so the display can never fall
+	# out of step with the actual setting.
 	var push_mode_text: String = "Steady" if push_mode == PushMode.STEADY else "Active control"
 	var air_braking_text: String = "On" if air_braking_enabled else "Off"
 	push_mode_readout.text = ("Push mode (C): " + push_mode_text
