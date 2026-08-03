@@ -60,7 +60,13 @@ var debug_log: FileAccess
 
 
 func _ready() -> void:
-	debug_log = FileAccess.open("res://coin_debug.log", FileAccess.WRITE)
+	# res:// is read-only in an exported build, so logging there works from the
+	# editor and crashes anywhere else. OS.has_feature("editor") is true when
+	# running the project directly with the Godot binary -- including headless
+	# test runs -- and false in an export, which is exactly the distinction
+	# needed. user:// resolves to the app data folder and is always writable.
+	var log_directory: String = "res://" if OS.has_feature("editor") else "user://"
+	debug_log = FileAccess.open(log_directory + "coin_debug.log", FileAccess.WRITE)
 	# FREEZE_MODE_KINEMATIC leaves the body present to the physics world --
 	# things still collide with it and rays still find it -- but the solver
 	# never integrates or moves it.

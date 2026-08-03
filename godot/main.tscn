@@ -497,11 +497,15 @@ polygon = PackedVector2Array(-7, -7, 7, -7, 7, 7, -7, 7)
 
 [node name="HUD" type="CanvasLayer" parent="." unique_id=1586455074]
 
-[node name="Controls" type="Label" parent="HUD" unique_id=1108686393]
+[node name="Readouts" type="VBoxContainer" parent="HUD"]
 offset_left = 16.0
 offset_top = 16.0
-offset_right = 420.0
-offset_bottom = 100.0
+offset_right = 720.0
+offset_bottom = 400.0
+theme_override_constants/separation = 14
+
+
+[node name="Controls" type="Label" parent="HUD/Readouts" unique_id=1108686393]
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 4
@@ -511,11 +515,7 @@ Attack: J   Aim: K   Throw + Push: L (aims at mouse)
 Recall coin: R   Push Mode: C   Midair Braking: V
 Selection mode: M   Quadrants: 1-4   Paint: P   Clear: X"
 
-[node name="PushModeReadout" type="Label" parent="HUD" unique_id=1708308170]
-offset_left = 16.0
-offset_top = 128.0
-offset_right = 560.0
-offset_bottom = 220.0
+[node name="PushModeReadout" type="Label" parent="HUD/Readouts" unique_id=1708308170]
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 4

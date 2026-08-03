@@ -35,7 +35,7 @@ const PIXELS_PER_METER = 100.0
 # Someone ELSE's held coin is fair game, which is why the exclusion is by
 # identity rather than by a global "is anyone carrying this" flag.
 @onready var carried_coin: RigidBody2D = $"../Coin"
-@onready var push_mode_readout: Label = $"../HUD/PushModeReadout"
+@onready var push_mode_readout: Label = $"../HUD/Readouts/PushModeReadout"
 
 var pending_recoil: Vector2 = Vector2.ZERO
 var debug_log: FileAccess
@@ -113,7 +113,13 @@ var air_braking_enabled: bool = true
 
 func _ready() -> void:
 	carried_coin.add_collision_exception_with(self)
-	debug_log = FileAccess.open("res://player_debug.log", FileAccess.WRITE)
+	# res:// is read-only in an exported build, so logging there works from the
+	# editor and crashes anywhere else. OS.has_feature("editor") is true when
+	# running the project directly with the Godot binary -- including headless
+	# test runs -- and false in an export, which is exactly the distinction
+	# needed. user:// resolves to the app data folder and is always writable.
+	var log_directory: String = "res://" if OS.has_feature("editor") else "user://"
+	debug_log = FileAccess.open(log_directory + "player_debug.log", FileAccess.WRITE)
 	# Last line on purpose: the @onready vars above (animated_sprite,
 	# reticle, and so on) must already be set before the first state's
 	# enter() runs, since Idle.enter() calls player_body.animated_sprite.play(...).
