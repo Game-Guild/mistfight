@@ -4,6 +4,19 @@ extends CharacterBody2D
 
 const SPEED = 300.0
 const JUMP_VELOCITY = -400.0
+
+# How fast a coin leaves your hand when you flick it, in pixels per second.
+# 1500 px/s is 15 metres per second at this project's 100 pixels to the metre,
+# or about 34 miles per hour -- a hard flick, well short of a thrown baseball
+# (roughly 40 m/s from a professional pitcher).
+#
+# Stated modelling choice, not canon: the books describe Coinshots flicking or
+# dropping a coin and then pushing it, but never say how hard the flick is.
+# What matters mechanically is only that it clears your hand -- the steelpush
+# does all the real work from there, and reaches thousands of metres per second
+# on its own. This number just decides which way the coin is heading when the
+# push takes over.
+const THROW_SPEED_PX_PER_S = 1500.0
 # The total strength of a Steelpush, in newtons. Was a fixed 2000.0, matching
 # sim/steelpush.py and notebook 15 exactly. Made adjustable from the inspector
 # (select the Player node, look under "Player") so this can be tuned by hand
@@ -135,6 +148,11 @@ func _physics_process(delta: float) -> void:
 	if Input.is_action_just_pressed("toggle_air_braking"):
 		air_braking_enabled = not air_braking_enabled
 		print("[toggle] midair braking -> ", "ON" if air_braking_enabled else "OFF")
+	# Testing affordance, not a mechanic -- see coin.gd's recall(). There is one
+	# coin and no way to pick it up, so without this you get one throw per run.
+	if Input.is_action_just_pressed("reset_hover"):
+		coin.recall()
+		print("[toggle] coin recalled to hand")
 	_update_toggle_readout()
 
 	state_machine.physics_process(delta)

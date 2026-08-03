@@ -120,6 +120,20 @@ func release() -> void:
 	is_carried = false
 
 
+func recall() -> void:
+	# Snap the coin back into the player's hand from wherever it ended up.
+	#
+	# This is a TESTING AFFORDANCE, not a designed mechanic, and it should not
+	# survive into anything anyone plays. There is exactly one coin in the
+	# scene and no way to pick it up, so without this you get one throw per
+	# launch of the game. Real coin handling -- a supply you carry, spend, and
+	# retrieve -- is issue #5, and this is a placeholder standing where that
+	# will go.
+	is_carried = true
+	velocity = Vector2.ZERO
+	$"../TrajectoryTrace".points = PackedVector2Array()
+
+
 func _process(_delta: float) -> void:
 	if is_carried:
 		# Still riding along on the player -- keep the trace empty.

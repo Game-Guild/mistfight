@@ -16,10 +16,54 @@ const HEIGHT_GAIN_N_PER_M = 2000.0
 const SPEED_GAIN_N_PER_M_PER_S = 2200.0
 const MAX_CONTROLLED_STRENGTH_N = 8000.0
 
+# --- The windup, and how to abandon it ----------------------------------------
+#
+# After the coin is flicked out of your hand, the push waits this long before
+# it engages. A tenth of a second.
+#
+# Why it has to wait at all. A carried coin sits 13 pixels below the player, so
+# the line between the two points almost straight down, and the push acts along
+# that line. Measured 2026-08-02: on the very first tick after a throw, the
+# flick contributed 702 px/s sideways and the push contributed 108,882 px/s
+# downward -- 155 times more. Without a pause the push wins instantly, the coin
+# is slammed into the ground at your feet, and which way you aimed makes no
+# difference at all. The flick needs a moment to carry the coin clear before
+# there is a meaningful direction to push along. At 1500 px/s a tenth of a
+# second puts the coin 150 pixels out, by which point the line to it is within
+# about 8 degrees of where you aimed.
+#
+# What this costs, stated plainly: it is a rule about how Allomancy works that
+# is not in the books, and sim/steelpush.py has no equivalent. A push there
+# acts at any distance, right down to zero. Elliott chose it 2026-08-03 with
+# the fallback below written in deliberately.
+#
+# IF IT FEELS WRONG, the fallback is separate buttons -- one to throw, one to
+# push -- which invents nothing. To switch:
+#   1. set THROW_WINDUP_SECONDS to 0.0
+#   2. move the _throw_coin() call out of enter() and onto its own input action
+#      polled in player.gd, next to the coin.recall() line
+# CoinShoot then only ever pushes what is already out in the world, which is
+# what it did before any of this, and no waiting rule exists anywhere.
+const THROW_WINDUP_SECONDS = 0.1
+
+# Seconds since the coin left the hand this time round. Starts already past the
+# windup when there was no throw -- pushing a coin that is lying on the ground
+# has nothing to wait for.
+var seconds_since_throw: float = 0.0
+
 
 func enter(_previous_state_name: String) -> void:
 	player_body.animated_sprite.play("COIN_SHOOT")
-	player_body.coin.release()
+	# Only throw if the coin is still in hand. If it is already lying on the
+	# ground or flying, pressing shoot just starts pushing whatever is out
+	# there -- which is what hovering over a landed coin needs.
+	if player_body.coin.is_carried:
+		_throw_coin()
+		seconds_since_throw = 0.0
+	else:
+		# Nothing was thrown, so there is nothing to wait for. Start the clock
+		# already past the windup and the push engages on the first tick.
+		seconds_since_throw = THROW_WINDUP_SECONDS
 	# Keep the blue Steel line up while the push is actually happening. It used
 	# to vanish the instant you left CoinTarget, which meant it was only ever
 	# visible while holding the aim key and never during the push itself --
@@ -33,12 +77,47 @@ func physics_process(delta: float) -> void:
 	if not Input.is_action_pressed("coin_shoot"):
 		state_machine.transition_to("Idle")
 		return
+
+	seconds_since_throw += delta
+	if seconds_since_throw < THROW_WINDUP_SECONDS:
+		# Mid-windup. The coin is flying on the flick alone and no push is
+		# applied yet, which also means no recoil -- you do not get launched
+		# during the throw itself.
+		#
+		# Worth knowing while playing: because the windup runs on held input,
+		# TAPPING this key gives a pure throw with no push at all, and HOLDING
+		# it gives throw-then-push. Both behaviours out of one button, without
+		# either being written as a special case.
+		player_body.update_steel_line_to_coin()
+		return
+
 	_push_against_coin(delta)
 
 
 func exit() -> void:
 	player_body.reticle.hide()
 	player_body.steel_line.hide()
+
+
+func _throw_coin() -> void:
+	# A Coinshot does not push a coin straight out of their own hand. They flick
+	# or drop it first, and then push what is already in the air -- because a
+	# push can only ever act along the line between the two bodies, so a coin
+	# held against your chest can only be shoved straight down at your feet.
+	# The flick is what decides which direction the coin sets off in; the push
+	# takes over from there and does all the real work.
+	#
+	# Direction comes from where the mouse is RIGHT NOW rather than from the
+	# reticle's stored position, so throwing works whether or not you were
+	# holding the aim key first. The reticle is the picture of this; the mouse
+	# is the thing itself.
+	var throw_direction: Vector2 = player_body.get_local_mouse_position().normalized()
+	if throw_direction == Vector2.ZERO:
+		# Mouse sitting exactly on the player leaves no direction to throw in.
+		# Drop it at your feet, which is the hovering case anyway.
+		throw_direction = Vector2.DOWN
+	player_body.coin.release()
+	player_body.coin.velocity = throw_direction * player_body.THROW_SPEED_PX_PER_S
 
 
 func _push_against_coin(delta: float) -> void:
