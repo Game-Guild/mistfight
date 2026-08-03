@@ -1,7 +1,11 @@
 extends PlayerState
 
-enum PushMode { STEADY, ACTIVE_CONTROL }
-var push_mode: PushMode = PushMode.STEADY
+# Which push mode is active is NOT stored here. It lives on Player, alongside
+# the other whole-game toggles, because the C key that changes it has to work
+# whether or not a push is currently happening. It used to be a variable on
+# this state polled from this state's physics_process, which meant the key only
+# ever did anything during the fraction of a second you were mid-push -- that
+# was issue #13.
 
 # Notebook 15 cell 7's HoverControl gains (notebooks/15_the_coinshot_hover.ipynb),
 # reused as-is from hover_pusher.gd's reproduction of that experiment --
@@ -15,12 +19,17 @@ const MAX_CONTROLLED_STRENGTH_N = 8000.0
 
 func enter(_previous_state_name: String) -> void:
 	player_body.animated_sprite.play("COIN_SHOOT")
-	player_body.coin.freeze = false
+	player_body.coin.release()
+	# Keep the blue Steel line up while the push is actually happening. It used
+	# to vanish the instant you left CoinTarget, which meant it was only ever
+	# visible while holding the aim key and never during the push itself --
+	# the one moment you most want to see the line the force is acting along.
+	# The reticle stays hidden: it points where you would flick a coin, and no
+	# flick is happening mid-push.
+	player_body.steel_line.show()
 
 
 func physics_process(delta: float) -> void:
-	if Input.is_action_just_pressed("toggle_control_mode"):
-		push_mode = PushMode.ACTIVE_CONTROL if push_mode == PushMode.STEADY else PushMode.STEADY
 	if not Input.is_action_pressed("coin_shoot"):
 		state_machine.transition_to("Idle")
 		return
@@ -33,13 +42,49 @@ func exit() -> void:
 
 
 func _push_against_coin(delta: float) -> void:
-	var angle: float = player_body.reticle.position.angle()
+	# Where the coin actually is, relative to the player. Everything below is
+	# derived from this one vector -- how hard the push is (distance) AND which
+	# way it points (direction).
 	var coin_offset: Vector2 = player_body.coin.global_position - player_body.global_position
 	var coin_distance_m: float = coin_offset.length() / player_body.PIXELS_PER_METER
 	var falloff: float = max(0.0, 1.0 - coin_distance_m / player_body.MAX_RANGE_M)
 
+	# The push points along the real line joining the two bodies. A Steelpush
+	# is a force PAIR along that line -- the coin is shoved directly away from
+	# the player, the player directly away from the coin, equal and opposite.
+	# sim/steelpush.py does exactly this and has no concept of "aim" at all:
+	#   offset = self.pusher.position - target.position
+	#   direction_to_pusher = offset / distance
+	# An Allomancer picks WHICH metal to push and where on it to push. They
+	# cannot push it in a direction unrelated to where the metal is.
+	#
+	# This line used to read `player_body.reticle.position.angle()` -- the
+	# reticle's aim direction -- which broke in two separate ways:
+	#   1. Aim somewhere the coin is NOT and the coin flew that way anyway.
+	#   2. Even as an aim reading it was wrong. coin_target_state.gd builds
+	#      the reticle position as (mouse direction * 20px) + (0, offset_y),
+	#      where offset_y is the sprite's visible center -- measured at 16px
+	#      for the IDLE frames. Taking .angle() of that sum bakes the sprite
+	#      offset into the direction: aiming dead horizontal produced the
+	#      vector (20, 16), which is 38.7 degrees BELOW horizontal.
+	# Deriving direction from coin_offset removes both problems at once,
+	# because the reticle stops feeding the physics entirely.
+	var push_direction: Vector2
+	if coin_offset.length() < 0.001:
+		# Player and coin occupying the same point has no "line between them"
+		# to push along. sim/steelpush.py hits the same degenerate case and
+		# resolves it by pushing the pusher straight up; the equivalent here is
+		# shoving the coin straight down, since our direction points at the
+		# coin and the recoil is its opposite. Should never happen in practice
+		# (a carried coin rides 13px below the player) -- this is a guard, not
+		# a behavior anyone is meant to see.
+		push_direction = Vector2.DOWN
+	else:
+		push_direction = coin_offset.normalized()
+	var angle: float = push_direction.angle()
+
 	var strength_n: float
-	if push_mode == PushMode.STEADY:
+	if player_body.push_mode == Player.PushMode.STEADY:
 		# The original behavior: full strength every tick, whatever the
 		# formula allows at this distance. Simple, and exactly what made
 		# the coin explosively hard to hold in place -- full force doesn't
@@ -71,11 +116,22 @@ func _push_against_coin(delta: float) -> void:
 		# infinite result anyway, this just keeps the intermediate value
 		# from ever reading as infinity.
 		strength_n = clamp(desired_force_n / max(falloff, 0.0001), 0.0, MAX_CONTROLLED_STRENGTH_N)
+		# Known limitation, stated rather than patched: every line above asks
+		# "how much UPWARD force do I need", but the force is then applied
+		# along push_direction, which only points straight up when the coin is
+		# directly below the player. Stand off to one side and the upward part
+		# of the push is only cos(lean angle) of what the controller asked
+		# for, so it under-lifts and swings. That is arguably the honest
+		# outcome -- you genuinely cannot hover cleanly off a coin that is not
+		# under you -- so it is left alone until playtesting says otherwise.
 
 	var force: float = strength_n * falloff * player_body.PIXELS_PER_METER
-	var recoil: Vector2 = -Vector2.from_angle(angle) * force / player_body.BASE_MASS_KG * delta
-	var mode_text: String = "steady" if push_mode == PushMode.STEADY else "active_control"
-	player_body.debug_log.store_line("[coin_shoot] mode=" + mode_text + " angle=" + str(angle) + " coin_distance_m=" + str(coin_distance_m) + " force=" + str(force) + " coin_global_pos=" + str(player_body.coin.global_position) + " coin_linear_velocity=" + str(player_body.coin.linear_velocity))
+	# Newton's third law: the coin goes one way along the line, the player goes
+	# the other. Same magnitude, divided by the player's much larger mass.
+	var recoil: Vector2 = -push_direction * force / player_body.BASE_MASS_KG * delta
+	var mode_text: String = "steady" if player_body.push_mode == Player.PushMode.STEADY else "active_control"
+	player_body.debug_log.store_line("[coin_shoot] mode=" + mode_text + " angle=" + str(angle) + " coin_distance_m=" + str(coin_distance_m) + " force=" + str(force) + " coin_global_pos=" + str(player_body.coin.global_position) + " coin_velocity=" + str(player_body.coin.velocity))
 	player_body.push.emit(angle, force)
 	player_body.pending_recoil += recoil
-	player_body.update_push_mode_readout(mode_text)
+	# Redraw the line every tick so it tracks the coin as it moves away.
+	player_body.update_steel_line_to_coin()

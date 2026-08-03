@@ -7,14 +7,14 @@
 [ext_resource type="Texture2D" uid="uid://c8qup4kukoeq4" path="res://assets/samurai/IDLE.png" id="4_272bh"]
 [ext_resource type="Texture2D" uid="uid://bfdiqflw84vyw" path="res://assets/samurai/RUN.png" id="5_lquwl"]
 [ext_resource type="Script" uid="uid://ho2k6vwibax8" path="res://coin.gd" id="7_272bh"]
-[ext_resource type="Script" uid="uid://bfkedfstej0iq" path="res://player_states/player_state_machine.gd" id="state_machine_script"]
-[ext_resource type="Script" uid="uid://dqf0ff7ye6v8m" path="res://player_states/idle_state.gd" id="idle_state_script"]
-[ext_resource type="Script" uid="uid://c4s31nfi28klp" path="res://player_states/run_state.gd" id="run_state_script"]
-[ext_resource type="Script" uid="uid://dq2k3i12b81cc" path="res://player_states/jump_state.gd" id="jump_state_script"]
 [ext_resource type="Script" uid="uid://ikwyhrig4ywf" path="res://player_states/attack_state.gd" id="attack_state_script"]
-[ext_resource type="Script" uid="uid://bc8jh2v4jnd74" path="res://player_states/hurt_state.gd" id="hurt_state_script"]
-[ext_resource type="Script" uid="uid://dk57yaoqscjxp" path="res://player_states/coin_target_state.gd" id="coin_target_state_script"]
 [ext_resource type="Script" uid="uid://bxr63b2pl1kpe" path="res://player_states/coin_shoot_state.gd" id="coin_shoot_state_script"]
+[ext_resource type="Script" uid="uid://dk57yaoqscjxp" path="res://player_states/coin_target_state.gd" id="coin_target_state_script"]
+[ext_resource type="Script" uid="uid://bc8jh2v4jnd74" path="res://player_states/hurt_state.gd" id="hurt_state_script"]
+[ext_resource type="Script" uid="uid://dqf0ff7ye6v8m" path="res://player_states/idle_state.gd" id="idle_state_script"]
+[ext_resource type="Script" uid="uid://dq2k3i12b81cc" path="res://player_states/jump_state.gd" id="jump_state_script"]
+[ext_resource type="Script" uid="uid://c4s31nfi28klp" path="res://player_states/run_state.gd" id="run_state_script"]
+[ext_resource type="Script" uid="uid://bfkedfstej0iq" path="res://player_states/player_state_machine.gd" id="state_machine_script"]
 
 [sub_resource type="CapsuleShape2D" id="CapsuleShape2D_055f0"]
 radius = 8.0
@@ -348,29 +348,32 @@ default_color = Color(0, 0.5866665, 0.88, 0.6509804)
 begin_cap_mode = 2
 end_cap_mode = 2
 
-[node name="StateMachine" type="Node" parent="Player"]
+[node name="StateMachine" type="Node" parent="Player" unique_id=576868919]
 script = ExtResource("state_machine_script")
 
-[node name="Idle" type="Node" parent="Player/StateMachine"]
+[node name="Idle" type="Node" parent="Player/StateMachine" unique_id=1240445537]
 script = ExtResource("idle_state_script")
 
-[node name="Run" type="Node" parent="Player/StateMachine"]
+[node name="Run" type="Node" parent="Player/StateMachine" unique_id=1260410865]
 script = ExtResource("run_state_script")
 
-[node name="Jump" type="Node" parent="Player/StateMachine"]
+[node name="Jump" type="Node" parent="Player/StateMachine" unique_id=1602792955]
 script = ExtResource("jump_state_script")
 
-[node name="Attack" type="Node" parent="Player/StateMachine"]
+[node name="Attack" type="Node" parent="Player/StateMachine" unique_id=495333985]
 script = ExtResource("attack_state_script")
 
-[node name="Hurt" type="Node" parent="Player/StateMachine"]
+[node name="Hurt" type="Node" parent="Player/StateMachine" unique_id=388286185]
 script = ExtResource("hurt_state_script")
 
-[node name="CoinTarget" type="Node" parent="Player/StateMachine"]
+[node name="CoinTarget" type="Node" parent="Player/StateMachine" unique_id=13612337]
 script = ExtResource("coin_target_state_script")
 
-[node name="CoinShoot" type="Node" parent="Player/StateMachine"]
+[node name="CoinShoot" type="Node" parent="Player/StateMachine" unique_id=88008685]
 script = ExtResource("coin_shoot_state_script")
+
+[node name="Camera2D" type="Camera2D" parent="Player" unique_id=1995531760]
+position = Vector2(217, -102)
 
 [node name="Floor" type="StaticBody2D" parent="." unique_id=1721463133]
 position = Vector2(0, 270)
@@ -379,14 +382,21 @@ physics_material_override = SubResource("PhysicsMaterial_coinfriction")
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Floor" unique_id=25556897]
 shape = SubResource("WorldBoundaryShape2D_055f0")
 
-[node name="FloorLine" type="Line2D" parent="Floor"]
-points = PackedVector2Array(-5000, 0, 5000, 0)
-width = 2.0
-default_color = Color(1, 1, 1, 1)
+[node name="Wall" type="StaticBody2D" parent="." unique_id=740161948]
+position = Vector2(472, 270)
+rotation = -1.5707964
+physics_material_override = SubResource("PhysicsMaterial_coinfriction")
 
-[node name="Camera2D" type="Camera2D" parent="." unique_id=1995531760]
-position = Vector2(241, 133)
-zoom = Vector2(2, 2)
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Wall" unique_id=533412595]
+shape = SubResource("WorldBoundaryShape2D_055f0")
+
+[node name="Wall2" type="StaticBody2D" parent="." unique_id=847744927]
+position = Vector2(-123, 270)
+rotation = 1.5707964
+physics_material_override = SubResource("PhysicsMaterial_coinfriction")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Wall2" unique_id=1702223121]
+shape = SubResource("WorldBoundaryShape2D_055f0")
 
 [node name="TrajectoryTrace" type="Line2D" parent="." unique_id=1123581321]
 width = 1.0
@@ -397,9 +407,9 @@ position = Vector2(24, 248)
 mass = 0.03
 physics_material_override = SubResource("PhysicsMaterial_coinfriction")
 freeze = true
+continuous_cd = 1
 contact_monitor = true
 max_contacts_reported = 4
-continuous_cd = 1
 script = ExtResource("7_272bh")
 
 [node name="Polygon2D" type="Polygon2D" parent="Coin" unique_id=681706153]
@@ -412,41 +422,41 @@ polygon = PackedVector2Array(0, 0, 1, 0, 1, 2, 0, 2)
 position = Vector2(0.5, 0.5)
 shape = SubResource("RectangleShape2D_055f0")
 
-[node name="StaticBody2D" type="StaticBody2D" parent="." unique_id=879876244]
+[node name="Indentation" type="StaticBody2D" parent="." unique_id=879876244]
 position = Vector2(64, 270)
 physics_material_override = SubResource("PhysicsMaterial_055f0")
 
-[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="StaticBody2D" unique_id=1042034051]
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="Indentation" unique_id=1042034051]
 polygon = PackedVector2Array(-11, -11, -11, 0, 11, 0, 11, -11, 6, -4, -6, -4)
 
-[node name="Polygon2D" type="Polygon2D" parent="StaticBody2D" unique_id=928646169]
+[node name="Polygon2D" type="Polygon2D" parent="Indentation" unique_id=928646169]
 polygon = PackedVector2Array(-11, 0, 11, 0, 11, -11, 6, -4, -6, -4, -11, -11)
 
-[node name="LeftWall" type="StaticBody2D" parent="."]
+[node name="LeftWall" type="StaticBody2D" parent="." unique_id=1564923924]
 position = Vector2(-150, 20)
 physics_material_override = SubResource("PhysicsMaterial_coinfriction")
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="LeftWall"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="LeftWall" unique_id=1389867255]
 shape = SubResource("RectangleShape2D_wall")
 
-[node name="Polygon2D" type="Polygon2D" parent="LeftWall"]
+[node name="Polygon2D" type="Polygon2D" parent="LeftWall" unique_id=604323271]
 color = Color(0.6, 0.55, 0.45, 1)
 polygon = PackedVector2Array(-25, -250, 25, -250, 25, 250, -25, 250)
 
-[node name="RightWall" type="StaticBody2D" parent="."]
+[node name="RightWall" type="StaticBody2D" parent="." unique_id=1730124162]
 position = Vector2(500, 20)
 physics_material_override = SubResource("PhysicsMaterial_coinfriction")
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="RightWall"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="RightWall" unique_id=1827129857]
 shape = SubResource("RectangleShape2D_wall")
 
-[node name="Polygon2D" type="Polygon2D" parent="RightWall"]
+[node name="Polygon2D" type="Polygon2D" parent="RightWall" unique_id=1677482611]
 color = Color(0.6, 0.55, 0.45, 1)
 polygon = PackedVector2Array(-25, -250, 25, -250, 25, 250, -25, 250)
 
-[node name="HUD" type="CanvasLayer" parent="."]
+[node name="HUD" type="CanvasLayer" parent="." unique_id=1586455074]
 
-[node name="Controls" type="Label" parent="HUD"]
+[node name="Controls" type="Label" parent="HUD" unique_id=1108686393]
 offset_left = 16.0
 offset_top = 16.0
 offset_right = 420.0
@@ -457,18 +467,19 @@ theme_override_constants/outline_size = 4
 theme_override_font_sizes/font_size = 16
 text = "Move: Left/Right   Jump: Space
 Attack: J   Coin Target: K   Coin Shoot: L
-Toggle Push Mode: C"
+Toggle Push Mode: C   Toggle Midair Braking: V"
 
-[node name="PushModeReadout" type="Label" parent="HUD"]
+[node name="PushModeReadout" type="Label" parent="HUD" unique_id=1708308170]
 offset_left = 16.0
 offset_top = 108.0
 offset_right = 420.0
-offset_bottom = 132.0
+offset_bottom = 156.0
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 4
 theme_override_font_sizes/font_size = 16
-text = "Push mode: Steady"
+text = "Push mode (C): Steady
+Midair braking (V): On"
 
 [connection signal="push" from="Player" to="Coin" method="_on_character_body_2d_push"]
 [connection signal="animation_finished" from="Player/AnimatedSprite2D" to="Player" method="_on_animated_sprite_2d_animation_finished"]
