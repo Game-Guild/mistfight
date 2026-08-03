@@ -51,6 +51,27 @@ var debug_log: FileAccess
 enum PushMode { STEADY, ACTIVE_CONTROL }
 var push_mode: PushMode = PushMode.STEADY
 
+# Half-angle of the selection wedge, in degrees. Metal within this many degrees
+# of where you are aiming gets pushed; metal outside it is ignored even though
+# it is in range and still has a steel line.
+#
+# This is the whole selection mechanic. Canon lets an Allomancer push any subset
+# of the metal they can see, which is not a control anyone can operate at speed.
+# Aiming a wedge is, because it states a direction, and direction is what the
+# player actually cares about -- the outcome of any multi-push is one net vector
+# regardless of how many things contributed to it.
+#
+# Width is a real trade, not a convenience. The push divides a fixed total
+# budget across everything selected and those contributions add as vectors, so a
+# narrow wedge concentrates on a few aligned anchors and launches hard, while a
+# wide one spreads across anchors that partly cancel and gives a weaker net push
+# from a more braced stance.
+var cone_half_angle_degrees: float = 30.0
+const CONE_MIN_HALF_ANGLE_DEGREES = 5.0
+# 180 selects everything in range, which is the same as having no wedge at all.
+const CONE_MAX_HALF_ANGLE_DEGREES = 180.0
+const CONE_STEP_DEGREES = 5.0
+
 # Whether horizontal speed decays to a stop in midair with no movement key held.
 # On, you can brake mid-jump. Off, you keep sailing. An airborne steelpush is
 # exempt either way -- see _apply_ground_movement().
@@ -113,6 +134,45 @@ func _physics_process(delta: float) -> void:
 	velocity += pending_recoil
 
 	move_and_slide()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	# The wedge is resized here rather than in _physics_process because a mouse
+	# wheel press and release land in the same instant -- polling for it on a
+	# fixed tick misses most of them.
+	if event.is_action_pressed("widen_cone"):
+		cone_half_angle_degrees = min(
+			cone_half_angle_degrees + CONE_STEP_DEGREES, CONE_MAX_HALF_ANGLE_DEGREES)
+	elif event.is_action_pressed("narrow_cone"):
+		cone_half_angle_degrees = max(
+			cone_half_angle_degrees - CONE_STEP_DEGREES, CONE_MIN_HALF_ANGLE_DEGREES)
+
+
+func aim_direction() -> Vector2:
+	# Where the wedge points. Read from the mouse directly rather than from the
+	# reticle, so aiming works whether or not the reticle happens to be on
+	# screen.
+	var to_mouse: Vector2 = get_local_mouse_position()
+	if to_mouse.length() < 0.001:
+		return Vector2.DOWN
+	return to_mouse.normalized()
+
+
+func select_metal_in_cone() -> Array:
+	# The metal a push actually acts on: in range AND inside the wedge.
+	#
+	# Everything in range still gets a steel line, because an Allomancer sees all
+	# of it. Seeing metal and choosing to push it are different things, and the
+	# display keeps them visually separate.
+	var direction: Vector2 = aim_direction()
+	var half_angle: float = deg_to_rad(cone_half_angle_degrees)
+	var selected: Array = []
+	for metal in find_metal_in_range():
+		var to_metal: Vector2 = metal.global_position - global_position
+		# angle_to() is signed, so either side of the aim counts the same.
+		if abs(direction.angle_to(to_metal)) <= half_angle:
+			selected.append(metal)
+	return selected
 
 
 func _poll_state_entry_inputs() -> void:
@@ -261,4 +321,6 @@ func _update_toggle_readout() -> void:
 	var push_mode_text: String = "Steady" if push_mode == PushMode.STEADY else "Active control"
 	var air_braking_text: String = "On" if air_braking_enabled else "Off"
 	push_mode_readout.text = ("Push mode (C): " + push_mode_text
-		+ "\nMidair braking (V): " + air_braking_text)
+		+ "\nMidair braking (V): " + air_braking_text
+		+ "\nPush wedge (scroll): %d deg  --  %d of %d in range selected"
+			% [cone_half_angle_degrees * 2, select_metal_in_cone().size(), find_metal_in_range().size()])
