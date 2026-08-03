@@ -38,7 +38,7 @@ func _process(_delta: float) -> void:
 
 
 func _draw() -> void:
-	var pushes: Array = player.compute_pushes(player.select_metal_in_cone(), player.BASE_PUSH_FORCE)
+	var pushes: Array = player.compute_pushes(player.select_targets(), player.BASE_PUSH_FORCE)
 	var net_force: Vector2 = player.net_push_on_player(pushes)
 
 	# The most any push can deliver, used to scale the drawing so arrow length

@@ -4,7 +4,9 @@ extends SceneTree
 # which physical key is each one bound to? Run with:
 #   godot --headless --path godot --script res://tests/check_input.gd
 func _init() -> void:
-	for action_name in ["jump", "coin_shoot", "toggle_control_mode", "toggle_air_braking", "widen_cone", "narrow_cone"]:
+	for action_name in ["jump", "coin_shoot", "toggle_control_mode", "toggle_air_braking", "widen_cone", "narrow_cone", "cycle_selection_mode",
+			"quadrant_1", "quadrant_2", "quadrant_3", "quadrant_4",
+			"paint_targets", "clear_targets"]:
 		if not InputMap.has_action(action_name):
 			print("%-22s MISSING FROM INPUTMAP" % action_name)
 			continue

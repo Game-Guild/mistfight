@@ -508,13 +508,14 @@ theme_override_constants/outline_size = 4
 theme_override_font_sizes/font_size = 16
 text = "Move: Left/Right   Jump: Space
 Attack: J   Aim: K   Throw + Push: L (aims at mouse)
-Recall coin: R   Push Mode: C   Midair Braking: V"
+Recall coin: R   Push Mode: C   Midair Braking: V
+Selection mode: M   Quadrants: 1-4   Paint: P   Clear: X"
 
 [node name="PushModeReadout" type="Label" parent="HUD" unique_id=1708308170]
 offset_left = 16.0
-offset_top = 108.0
-offset_right = 420.0
-offset_bottom = 156.0
+offset_top = 128.0
+offset_right = 560.0
+offset_bottom = 220.0
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 4

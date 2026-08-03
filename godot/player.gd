@@ -55,12 +55,6 @@ var push_mode: PushMode = PushMode.STEADY
 # of where you are aiming gets pushed; metal outside it is ignored even though
 # it is in range and still has a steel line.
 #
-# This is the whole selection mechanic. Canon lets an Allomancer push any subset
-# of the metal they can see, which is not a control anyone can operate at speed.
-# Aiming a wedge is, because it states a direction, and direction is what the
-# player actually cares about -- the outcome of any multi-push is one net vector
-# regardless of how many things contributed to it.
-#
 # Width is a real trade, not a convenience. The push divides a fixed total
 # budget across everything selected and those contributions add as vectors, so a
 # narrow wedge concentrates on a few aligned anchors and launches hard, while a
@@ -71,6 +65,45 @@ const CONE_MIN_HALF_ANGLE_DEGREES = 5.0
 # 180 selects everything in range, which is the same as having no wedge at all.
 const CONE_MAX_HALF_ANGLE_DEGREES = 180.0
 const CONE_STEP_DEGREES = 5.0
+
+
+# --- Three ways of choosing what to push --------------------------------------
+#
+# All three sit on top of identical physics and none is more faithful than the
+# others, because canon has no controller in it. They differ only in how many
+# inputs it takes to say what you mean. Cycle with M and compare.
+#
+#   FREE_WEDGE -- aim a wedge with the mouse, scroll to change its width.
+#                 Continuous and precise, but it takes a whole aim to operate.
+#
+#   QUADRANTS  -- four fixed 90-degree sectors, toggled with 1-4. A quadrant is
+#                 just a wedge with a snapped direction and a fixed width, and
+#                 turning on 2 and 3 together makes one 180-degree wedge
+#                 pointing down. Far faster to state a rough direction, and it
+#                 scales to a sphere if this ever goes 3D.
+#
+#   PAINTED    -- pick metal by identity rather than direction. Hold P and sweep
+#                 the wedge over things to add them; X clears. They stay
+#                 selected wherever they go, because you chose that object, not
+#                 that direction. This is the one that supports throwing a coin
+#                 and riding it, or pushing one specific mechanism in a puzzle.
+#
+# Note the asymmetry, and that it is deliberate. The first two select by WHERE
+# something is, so they must be re-evaluated every frame: the direction to a
+# target decides which way the force goes, so metal drifting behind you would
+# silently invert your push. The third selects by WHICH thing it is, so no
+# amount of drifting changes what you meant, and it never re-evaluates.
+enum SelectionMode { FREE_WEDGE, QUADRANTS, PAINTED }
+var selection_mode: SelectionMode = SelectionMode.FREE_WEDGE
+
+# Which quadrants are switched on, indexed 0-3 for quadrants 1-4. Numbered
+# clockwise from top-right, so 2 and 3 are the bottom pair and 1 and 4 the top.
+# Defaults to the bottom half, which is the one you want for launching upward.
+var quadrant_enabled: Array = [false, true, true, false]
+
+# Metal picked by identity in PAINTED mode. Survives anything except being
+# cleared, or the node itself ceasing to exist.
+var painted_targets: Array = []
 
 # Whether horizontal speed decays to a stop in midair with no movement key held.
 # On, you can brake mid-jump. Off, you keep sailing. An airborne steelpush is
@@ -120,6 +153,7 @@ func _physics_process(delta: float) -> void:
 	if Input.is_action_just_pressed("reset_hover"):
 		carried_coin.recall()
 		print("[toggle] coin recalled to hand")
+	_poll_selection_inputs()
 	_update_toggle_readout()
 
 	state_machine.physics_process(delta)
@@ -148,6 +182,30 @@ func _unhandled_input(event: InputEvent) -> void:
 			cone_half_angle_degrees - CONE_STEP_DEGREES, CONE_MIN_HALF_ANGLE_DEGREES)
 
 
+func _poll_selection_inputs() -> void:
+	if Input.is_action_just_pressed("cycle_selection_mode"):
+		selection_mode = ((selection_mode + 1) % SelectionMode.size()) as SelectionMode
+		print("[selection] mode -> ", SelectionMode.keys()[selection_mode])
+
+	# Quadrant toggles are live in every mode, not just QUADRANTS. Leaving them
+	# settable while you are in another mode means you can set up the quadrants
+	# you want before switching to them.
+	for quadrant_number in range(1, 5):
+		if Input.is_action_just_pressed("quadrant_%d" % quadrant_number):
+			var index: int = quadrant_number - 1
+			quadrant_enabled[index] = not quadrant_enabled[index]
+			print("[selection] quadrant %d -> %s"
+				% [quadrant_number, "on" if quadrant_enabled[index] else "off"])
+
+	# Painting runs while held, so sweeping the mouse paints a swathe rather
+	# than picking one thing per press.
+	if Input.is_action_pressed("paint_targets"):
+		paint_targets_under_wedge()
+	if Input.is_action_just_pressed("clear_targets"):
+		painted_targets.clear()
+		print("[selection] painted targets cleared")
+
+
 func aim_direction() -> Vector2:
 	# Where the wedge points. Read from the mouse directly rather than from the
 	# reticle, so aiming works whether or not the reticle happens to be on
@@ -158,14 +216,23 @@ func aim_direction() -> Vector2:
 	return to_mouse.normalized()
 
 
-func select_metal_in_cone() -> Array:
-	# The metal a push actually acts on: in range AND inside the wedge.
+func select_targets() -> Array:
+	# The metal a push actually acts on, under whichever model is active.
 	#
-	# Everything in range still gets a steel line, because an Allomancer sees all
-	# of it. Seeing metal and choosing to push it are different things, and the
-	# display keeps them visually separate.
-	var direction: Vector2 = aim_direction()
-	var half_angle: float = deg_to_rad(cone_half_angle_degrees)
+	# Everything in range still gets a steel line regardless, because an
+	# Allomancer sees all of it. Seeing metal and choosing to push it are
+	# different things and the display keeps them visually separate.
+	match selection_mode:
+		SelectionMode.QUADRANTS:
+			return _select_by_quadrant()
+		SelectionMode.PAINTED:
+			return _select_painted()
+		_:
+			return _select_by_wedge(aim_direction(), cone_half_angle_degrees)
+
+
+func _select_by_wedge(direction: Vector2, half_angle_degrees: float) -> Array:
+	var half_angle: float = deg_to_rad(half_angle_degrees)
 	var selected: Array = []
 	for metal in find_metal_in_range():
 		var to_metal: Vector2 = metal.global_position - global_position
@@ -173,6 +240,44 @@ func select_metal_in_cone() -> Array:
 		if abs(direction.angle_to(to_metal)) <= half_angle:
 			selected.append(metal)
 	return selected
+
+
+func _select_by_quadrant() -> Array:
+	var selected: Array = []
+	for metal in find_metal_in_range():
+		if quadrant_enabled[quadrant_index_of(metal.global_position - global_position)]:
+			selected.append(metal)
+	return selected
+
+
+func quadrant_index_of(offset: Vector2) -> int:
+	# Quadrants numbered clockwise from top-right, returned zero-based. Godot's
+	# y axis points DOWN the screen, so a negative y is up.
+	#   0 -> quadrant 1, top-right      1 -> quadrant 2, bottom-right
+	#   3 -> quadrant 4, top-left       2 -> quadrant 3, bottom-left
+	if offset.x >= 0.0:
+		return 0 if offset.y < 0.0 else 1
+	return 3 if offset.y < 0.0 else 2
+
+
+func _select_painted() -> Array:
+	# Painted metal stays selected wherever it goes. The only thing that removes
+	# it is clearing, or the node being freed -- which has to be checked, because
+	# holding a reference to a deleted node crashes on access.
+	var still_alive: Array = []
+	for metal in painted_targets:
+		if is_instance_valid(metal):
+			still_alive.append(metal)
+	painted_targets = still_alive
+	return painted_targets
+
+
+func paint_targets_under_wedge() -> void:
+	# Add whatever the wedge is currently over to the painted set. Called every
+	# tick the paint key is held, so sweeping the mouse paints a swathe.
+	for metal in _select_by_wedge(aim_direction(), cone_half_angle_degrees):
+		if not painted_targets.has(metal):
+			painted_targets.append(metal)
 
 
 func _poll_state_entry_inputs() -> void:
@@ -322,5 +427,21 @@ func _update_toggle_readout() -> void:
 	var air_braking_text: String = "On" if air_braking_enabled else "Off"
 	push_mode_readout.text = ("Push mode (C): " + push_mode_text
 		+ "\nMidair braking (V): " + air_braking_text
-		+ "\nPush wedge (scroll): %d deg  --  %d of %d in range selected"
-			% [cone_half_angle_degrees * 2, select_metal_in_cone().size(), find_metal_in_range().size()])
+		+ "\nSelect (M): " + SelectionMode.keys()[selection_mode] + "   " + _selection_detail()
+		+ "\n%d of %d metal in range selected"
+			% [select_targets().size(), find_metal_in_range().size()])
+
+
+func _selection_detail() -> String:
+	# The one extra fact that matters for whichever model is running.
+	match selection_mode:
+		SelectionMode.QUADRANTS:
+			var on: Array = []
+			for quadrant_number in range(1, 5):
+				if quadrant_enabled[quadrant_number - 1]:
+					on.append(str(quadrant_number))
+			return "(1-4) on: " + ("none" if on.is_empty() else ", ".join(on))
+		SelectionMode.PAINTED:
+			return "(hold P to paint, X to clear) %d painted" % painted_targets.size()
+		_:
+			return "(scroll) %d deg wide" % (cone_half_angle_degrees * 2)

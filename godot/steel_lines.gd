@@ -26,8 +26,7 @@ const SELECTED_WIDTH_PX = 2.5
 # off screen, so the edges are drawn as short guides rather than to their real
 # extent -- they show a direction, not a boundary you could see the end of.
 const WEDGE_GUIDE_LENGTH_PX = 110.0
-const WEDGE_COLOR = Color(0.55, 0.9, 1.0, 0.25)
-const WEDGE_WIDTH_PX = 1.0
+const WEDGE_COLOR = Color(0.55, 0.9, 1.0, 0.10)
 
 var player: Player
 
@@ -44,7 +43,7 @@ func _process(_delta: float) -> void:
 
 
 func _draw() -> void:
-	var selected: Array = player.select_metal_in_cone()
+	var selected: Array = player.select_targets()
 	var range_px: float = player.MAX_RANGE_M * player.PIXELS_PER_METER
 
 	for metal in player.find_metal_in_range():
@@ -61,16 +60,45 @@ func _draw() -> void:
 			FAR_COLOR.lerp(NEAR_COLOR, nearness),
 			lerp(FAR_WIDTH_PX, NEAR_WIDTH_PX, nearness))
 
-	_draw_wedge_edges()
+	_draw_selection_shape()
 
 
-func _draw_wedge_edges() -> void:
-	# At the widest setting the wedge covers everything, so edges would be
-	# meaningless -- there is nothing outside them to exclude.
+func _draw_selection_shape() -> void:
+	# What the shape looks like depends on how you are choosing targets. Painted
+	# mode still shows the wedge, because the wedge is the brush you paint with.
+	if player.selection_mode == player.SelectionMode.QUADRANTS:
+		_draw_enabled_quadrants()
+	else:
+		_draw_wedge()
+
+
+func _draw_wedge() -> void:
+	# At the widest setting the wedge covers everything, so drawing it would say
+	# nothing -- there is no outside left to exclude.
 	if player.cone_half_angle_degrees >= player.CONE_MAX_HALF_ANGLE_DEGREES:
 		return
-	var aim: Vector2 = player.aim_direction()
+	var aim_angle: float = player.aim_direction().angle()
 	var half_angle: float = deg_to_rad(player.cone_half_angle_degrees)
-	for side in [-1.0, 1.0]:
-		var edge: Vector2 = aim.rotated(half_angle * side) * WEDGE_GUIDE_LENGTH_PX
-		draw_line(Vector2.ZERO, edge, WEDGE_COLOR, WEDGE_WIDTH_PX)
+	_draw_sector(aim_angle - half_angle, aim_angle + half_angle)
+
+
+func _draw_enabled_quadrants() -> void:
+	# Angles run from +x, increasing clockwise on screen because Godot's y axis
+	# points down. Quadrants are numbered clockwise from top-right, so quadrant 1
+	# spans -90 to 0 degrees, quadrant 2 spans 0 to 90, and so on round.
+	for index in range(4):
+		if not player.quadrant_enabled[index]:
+			continue
+		var start_angle: float = -PI / 2.0 + (PI / 2.0) * index
+		_draw_sector(start_angle, start_angle + PI / 2.0)
+
+
+func _draw_sector(start_angle: float, end_angle: float) -> void:
+	# A filled pie slice, built as a fan of points around the arc. A filled shape
+	# reads much faster than two edge lines when you are moving.
+	var points: PackedVector2Array = PackedVector2Array([Vector2.ZERO])
+	var steps: int = max(2, int((end_angle - start_angle) / 0.1))
+	for step in range(steps + 1):
+		var angle: float = lerp(start_angle, end_angle, float(step) / steps)
+		points.append(Vector2.from_angle(angle) * WEDGE_GUIDE_LENGTH_PX)
+	draw_colored_polygon(points, WEDGE_COLOR)

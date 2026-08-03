@@ -82,7 +82,7 @@ func _throw_coin() -> void:
 
 
 func _push_against_metal(delta: float) -> void:
-	var targets: Array = player_body.select_metal_in_cone()
+	var targets: Array = player_body.select_targets()
 	if targets.is_empty():
 		return
 
