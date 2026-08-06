@@ -11,13 +11,15 @@ extends CharacterBody2D
 const SPEED = 300.0
 const JUMP_VELOCITY = -400.0
 
-# Same numbers as player.gd (BASE_PUSH_FORCE, MAX_RANGE_M, BASE_MASS_KG,
-# PIXELS_PER_METER) and notebook 15 (PUSH_STRENGTH_N, MAX_RANGE_M,
-# WAX_MASS_KG). They already match; that match is what makes this scene a
-# faithful reproduction instead of a new experiment.
+# Same numbers as player.gd (BASE_PUSH_FORCE, MAX_RANGE_M, PIXELS_PER_METER)
+# and notebook 15 (PUSH_STRENGTH_N, MAX_RANGE_M, WAX_MASS_KG). They already
+# match; that match is what makes this scene a faithful reproduction instead
+# of a new experiment. BASE_MASS_KG is no longer a separate copy -- it reads
+# player.gd's DEFAULT_MASS_KG directly (issue #21), so the two can't drift
+# apart the way a hand-synced pair of consts could.
 const BASE_PUSH_FORCE_N = 2000.0
 const MAX_RANGE_M = 16.0
-const BASE_MASS_KG = 80.0
+const BASE_MASS_KG = Player.DEFAULT_MASS_KG
 const PIXELS_PER_METER = 100.0
 
 # Notebook 15 cell 7's HoverControl gains. Stated there as tuning, not
