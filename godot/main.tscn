@@ -6,7 +6,8 @@
 [ext_resource type="Texture2D" uid="uid://2o45rtwcnf5y" path="res://assets/samurai/HURT.png" id="3_7mycd"]
 [ext_resource type="Texture2D" uid="uid://c8qup4kukoeq4" path="res://assets/samurai/IDLE.png" id="4_272bh"]
 [ext_resource type="Texture2D" uid="uid://bfdiqflw84vyw" path="res://assets/samurai/RUN.png" id="5_lquwl"]
-[ext_resource type="Script" uid="uid://ho2k6vwibax8" path="res://coin.gd" id="7_272bh"]
+[ext_resource type="PackedScene" path="res://coin.tscn" id="coin_scene"]
+[ext_resource type="Script" path="res://coin_inventory.gd" id="coin_inventory_script"]
 [ext_resource type="Script" path="res://steel_lines.gd" id="steel_lines_script"]
 [ext_resource type="Script" path="res://push_arrow.gd" id="push_arrow_script"]
 [ext_resource type="Script" uid="uid://ikwyhrig4ywf" path="res://player_states/attack_state.gd" id="attack_state_script"]
@@ -309,9 +310,6 @@ friction = 0.6
 
 [sub_resource type="WorldBoundaryShape2D" id="WorldBoundaryShape2D_055f0"]
 
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_055f0"]
-size = Vector2(1, 3)
-
 [sub_resource type="PhysicsMaterial" id="PhysicsMaterial_055f0"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_metal"]
@@ -327,7 +325,7 @@ visible = false
 position = Vector2(240, 136)
 texture = ExtResource("1_1bvp3")
 
-[node name="Player" type="CharacterBody2D" parent="." unique_id=1995531758]
+[node name="Player" type="CharacterBody2D" parent="." groups=["player"] unique_id=1995531758]
 position = Vector2(24, 235)
 script = ExtResource("2_7mycd")
 
@@ -377,6 +375,9 @@ script = ExtResource("coin_target_state_script")
 [node name="CoinShoot" type="Node" parent="Player/StateMachine" unique_id=88008685]
 script = ExtResource("coin_shoot_state_script")
 
+[node name="CoinInventory" type="Node" parent="Player"]
+script = ExtResource("coin_inventory_script")
+
 [node name="Camera2D" type="Camera2D" parent="Player" unique_id=1995531760]
 position = Vector2(217, -102)
 
@@ -403,25 +404,8 @@ physics_material_override = SubResource("PhysicsMaterial_coinfriction")
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Wall2" unique_id=1702223121]
 shape = SubResource("WorldBoundaryShape2D_055f0")
 
-[node name="TrajectoryTrace" type="Line2D" parent="." unique_id=1123581321]
-width = 1.0
-default_color = Color(1, 1, 0, 1)
-
-[node name="Coin" type="RigidBody2D" parent="." groups=["metal"] unique_id=494870156]
+[node name="Coin" parent="." instance=ExtResource("coin_scene")]
 position = Vector2(24, 248)
-mass = 0.03
-freeze = true
-script = ExtResource("7_272bh")
-
-[node name="Polygon2D" type="Polygon2D" parent="Coin" unique_id=681706153]
-position = Vector2(0, -1)
-scale = Vector2(1, 1.5)
-color = Color(0.91197884, 0.0025784366, 0.0014126375, 1)
-polygon = PackedVector2Array(0, 0, 1, 0, 1, 2, 0, 2)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Coin" unique_id=1877793477]
-position = Vector2(0.5, 0.5)
-shape = SubResource("RectangleShape2D_055f0")
 
 [node name="Indentation" type="StaticBody2D" parent="." unique_id=879876244]
 position = Vector2(64, 270)
@@ -512,7 +496,7 @@ theme_override_constants/outline_size = 4
 theme_override_font_sizes/font_size = 16
 text = "Move: Left/Right   Jump: Space
 Attack: J   Aim: K   Throw + Push: L (aims at mouse)
-Recall coin: R   Push Mode: C   Midair Braking: V
+Pick up coin: R   Push Mode: C   Midair Braking: V
 Selection mode: M   Quadrants: 1-4   Paint: P   Clear: X"
 
 [node name="PushModeReadout" type="Label" parent="HUD/Readouts" unique_id=1708308170]

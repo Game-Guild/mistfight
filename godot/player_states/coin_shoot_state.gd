@@ -28,11 +28,14 @@ var seconds_since_throw: float = 0.0
 
 func enter(_previous_state_name: String) -> void:
 	player_body.animated_sprite.play("COIN_SHOOT")
-	# Only throw if the coin is still in hand. If it is already lying on the
-	# ground or flying, pressing shoot just starts pushing whatever is out
-	# there -- which is what hovering over a landed coin needs.
-	if player_body.carried_coin.is_carried:
-		_throw_coin()
+	# Draw a coin from reserve if the hand is empty; draw_coin() just hands
+	# back whatever is already held if there is one. Only throw if a coin
+	# actually came out of that -- if reserve is empty, or a coin is already
+	# lying on the ground or flying, pressing shoot just starts pushing
+	# whatever is out there, which is what hovering over a landed coin needs.
+	var coin: RigidBody2D = player_body.coin_inventory.draw_coin()
+	if coin != null:
+		_throw_coin(coin)
 		seconds_since_throw = 0.0
 	else:
 		# Nothing was thrown, so there is nothing to wait for. Start the clock
@@ -65,7 +68,7 @@ func exit() -> void:
 	player_body.push_arrow.hide()
 
 
-func _throw_coin() -> void:
+func _throw_coin(coin: RigidBody2D) -> void:
 	# A push acts along the line between the two bodies, so a coin held against
 	# your chest can only be shoved at your feet. The flick sets which direction
 	# it leaves in; the push takes over from there.
@@ -77,8 +80,8 @@ func _throw_coin() -> void:
 		# Mouse sitting exactly on the player leaves no direction to throw in.
 		# Drop it at your feet, which is the hovering case anyway.
 		throw_direction = Vector2.DOWN
-	player_body.carried_coin.release()
-	player_body.carried_coin.velocity = throw_direction * player_body.THROW_SPEED_PX_PER_S
+	coin.release()
+	coin.velocity = throw_direction * player_body.THROW_SPEED_PX_PER_S
 
 
 func _push_against_metal(delta: float) -> void:
@@ -97,7 +100,7 @@ func _push_against_metal(delta: float) -> void:
 	# The player's half of every force pair, summed. Targets on opposite sides
 	# cancel here, which is the whole reason the arrow is worth drawing.
 	var net_force: Vector2 = player_body.net_push_on_player(pushes)
-	player_body.pending_recoil += net_force / player_body.BASE_MASS_KG * delta
+	player_body.pending_recoil += net_force / player_body.mass_kg * delta
 
 	var mode_text: String = "steady" if player_body.push_mode == Player.PushMode.STEADY else "active_control"
 	player_body.debug_log.store_line("[coin_shoot] mode=" + mode_text
@@ -126,7 +129,7 @@ func _push_budget_newtons(targets: Array) -> float:
 	var falloff: float = max(0.0, 1.0 - distance_m / player_body.MAX_RANGE_M)
 
 	var gravity_m_per_s2: float = player_body.get_gravity().length() / player_body.PIXELS_PER_METER
-	var weight_n: float = player_body.BASE_MASS_KG * gravity_m_per_s2
+	var weight_n: float = player_body.mass_kg * gravity_m_per_s2
 	# Where a STEADY push would exactly cancel gravity: strength * (1 - d/range)
 	# = m*g, solved for d.
 	var equilibrium_height_m: float = player_body.MAX_RANGE_M * (1.0 - weight_n / player_body.BASE_PUSH_FORCE)

@@ -5,7 +5,7 @@ extends RigidBody2D
 # touches it -- every pixel it travels is moved by the code below.
 #
 # A solver decides collisions from where a body is at the start and end of a
-# tick. A steelpush accelerates this 0.03 kg coin at ~6.6 million px/s^2, fast
+# tick. A steelpush accelerates this 0.004 kg coin at ~50 million px/s^2, fast
 # enough to cross hundreds of pixels between those two snapshots, so a wall it
 # should have hit appears in neither and it passes through. Instead the coin is
 # swept: move_and_collide() drags its shape along the entire path it means to
@@ -45,6 +45,17 @@ const MAX_SWEEP_STEPS = 4
 # copied every frame, so an uncapped trail gets slower the longer it gets.
 const MAX_TRACE_POINTS = 300
 
+# Quadratic air drag, ported from sim/air.py (issue #18): drag force = -0.5 *
+# air density * drag coefficient * cross-section area * speed * velocity.
+# DRAG_COEFFICIENT is sim.Body's own default for a sphere. DRAG_RADIUS_M is
+# for this formula's cross-section only, not the collision box above -- it
+# now matches sim/probe_check.py's own coin (radius_m=0.01) exactly, the same
+# way this coin's mass matches it (Elliott, issue #18): sim and this game
+# agree on what a coin is, rather than one borrowing a number from the other.
+const AIR_DENSITY_KG_PER_M3 = 1.225
+const DRAG_COEFFICIENT = 0.47
+const DRAG_RADIUS_M = 0.01
+
 
 # --- State -------------------------------------------------------------------
 
@@ -56,6 +67,17 @@ var velocity: Vector2 = Vector2.ZERO
 # as long as this is set, and nothing in this file moves it.
 var is_carried: bool = true
 
+# True while the player's body is overlapping PickupArea. Set by the two
+# handlers below, read by _physics_process() to decide whether a held pickup
+# key actually does anything this tick.
+var player_in_pickup_range: bool = false
+
+# Fired the tick the player picks this coin up off the ground. coin_inventory.gd
+# listens for it on every coin it hands out; this file never mentions an
+# inventory by name, the same way it never mentions a Player by name -- it
+# just announces what happened to itself and lets whoever cares react.
+signal picked_up(coin: RigidBody2D)
+
 var debug_log: FileAccess
 
 
@@ -66,33 +88,48 @@ func _ready() -> void:
 	# test runs -- and false in an export, which is exactly the distinction
 	# needed. user:// resolves to the app data folder and is always writable.
 	var log_directory: String = "res://" if OS.has_feature("editor") else "user://"
-	debug_log = FileAccess.open(log_directory + "coin_debug.log", FileAccess.WRITE)
+	# get_instance_id() makes the filename unique per coin. Issue #5 means
+	# several coins can exist at once, each opening this file in WRITE mode --
+	# without a unique name, every new coin drawn from reserve would truncate
+	# whatever the others already had open, and their log lines would clobber
+	# each other.
+	debug_log = FileAccess.open(log_directory + "coin_%d_debug.log" % get_instance_id(), FileAccess.WRITE)
 	# FREEZE_MODE_KINEMATIC leaves the body present to the physics world --
 	# things still collide with it and rays still find it -- but the solver
 	# never integrates or moves it.
 	freeze = true
 	freeze_mode = RigidBody2D.FREEZE_MODE_KINEMATIC
+	$PickupArea.body_entered.connect(_on_pickup_area_body_entered)
+	$PickupArea.body_exited.connect(_on_pickup_area_body_exited)
 
 
 func release() -> void:
 	# Called when the player lets go of the coin, so it starts obeying gravity
 	# and pushes instead of riding along.
 	is_carried = false
+	# PickupArea starts disabled (see coin.tscn) so a coin riding on the
+	# player's own body doesn't immediately re-trigger its own pickup. It only
+	# needs to start listening once the coin is actually out in the world.
+	# set_deferred because this runs mid-physics-tick, from inside the
+	# player's own _physics_process -- see tunnel_test.gd's use of the same
+	# pattern on the practice walls for why a direct assignment here is unsafe.
+	$PickupArea.set_deferred("monitoring", true)
 
 
-func recall() -> void:
-	# Snap the coin back to the player's hand from wherever it ended up.
-	# Testing affordance, not a mechanic: there is one coin and no way to pick
-	# it up. Real coin handling is issue #5.
-	is_carried = true
-	velocity = Vector2.ZERO
-	$"../TrajectoryTrace".points = PackedVector2Array()
+func _on_pickup_area_body_entered(body: Node2D) -> void:
+	if body.is_in_group("player"):
+		player_in_pickup_range = true
+
+
+func _on_pickup_area_body_exited(body: Node2D) -> void:
+	if body.is_in_group("player"):
+		player_in_pickup_range = false
 
 
 func _process(_delta: float) -> void:
 	if is_carried:
 		# Still riding along on the player -- keep the trace empty.
-		$"../TrajectoryTrace".points = PackedVector2Array()
+		$TrajectoryTrace.points = PackedVector2Array()
 	else:
 		# In flight -- append this frame's position so the trace grows into the
 		# path actually flown, even though the coin itself moves too fast this
@@ -102,23 +139,45 @@ func _process(_delta: float) -> void:
 		# .append() straight on $Node.points silently mutates a throwaway copy
 		# and never touches the real property. It has to be copied out,
 		# appended to, then assigned back.
-		var trace_points: PackedVector2Array = $"../TrajectoryTrace".points
+		var trace_points: PackedVector2Array = $TrajectoryTrace.points
 		trace_points.append(global_position)
 		if trace_points.size() > MAX_TRACE_POINTS:
 			# Drop the oldest point, making the trail a moving window over the
 			# recent path rather than the whole history.
 			trace_points.remove_at(0)
-		$"../TrajectoryTrace".points = trace_points
+		$TrajectoryTrace.points = trace_points
 
 
 func _physics_process(delta: float) -> void:
 	if is_carried:
 		return
+	if player_in_pickup_range and Input.is_action_pressed("coin_pickup"):
+		# Handing off to whoever is listening (coin_inventory.gd) rather than
+		# freeing the node here -- this file still doesn't need to know an
+		# inventory exists, the same way it never needed to know about Player.
+		picked_up.emit(self)
+		return
 	# Gravity, then move. Any steelpush force arriving this tick has already
 	# been folded into velocity by receive_push() below, which runs from the
 	# player's own _physics_process.
 	velocity += get_gravity() * delta
+	_apply_air_drag(delta)
 	_move_by_sweeping(delta)
+
+
+func _apply_air_drag(delta: float) -> void:
+	# Same formula player.gd and hover_pusher.gd use for their own drag,
+	# ported here for the coin (issue #18). sim/air.py applies this to every
+	# non-fixed body unconditionally, so it runs every tick in flight, not
+	# just while falling.
+	var speed_m_per_s: float = velocity.length() / Player.PIXELS_PER_METER
+	if speed_m_per_s < 0.001:
+		return
+	var cross_section_area_m2: float = PI * DRAG_RADIUS_M * DRAG_RADIUS_M
+	var drag_force_n: float = (0.5 * AIR_DENSITY_KG_PER_M3 * DRAG_COEFFICIENT
+		* cross_section_area_m2 * speed_m_per_s * speed_m_per_s)
+	var drag_force_px: float = drag_force_n * Player.PIXELS_PER_METER
+	velocity += -velocity.normalized() * drag_force_px / mass * delta
 
 
 func _move_by_sweeping(delta: float) -> void:

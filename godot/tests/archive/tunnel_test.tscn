@@ -1,7 +1,7 @@
 [gd_scene load_steps=3 format=3]
 
 [ext_resource type="PackedScene" uid="uid://c73gioa6sk34b" path="res://main.tscn" id="1_main"]
-[ext_resource type="Script" path="res://tests/tunnel_test.gd" id="2_harness"]
+[ext_resource type="Script" path="res://tests/archive/tunnel_test.gd" id="2_harness"]
 
 [node name="TunnelTest" type="Node"]
 

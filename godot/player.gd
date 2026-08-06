@@ -16,7 +16,14 @@ const THROW_SPEED_PX_PER_S = 1500.0
 # as much as the shot. Below ~793 N it cannot beat the player's own weight and
 # you never leave the ground; 2000 hovers about 9.7 m above the coin.
 const BASE_PUSH_FORCE: float = 2000.0
-const BASE_MASS_KG = 80.0
+# The player's mass in kilograms. A var, not a const, because Iron feruchemy
+# (issue #21) will need to change it at runtime -- storing or tapping weight
+# rewrites this field, conserving momentum the way sim/bodies.py's
+# change_mass() does. Nothing does that yet; this just makes the field able
+# to hold a live value instead of being baked into the script text, and
+# gives hover_pusher.gd's own copy (see that file) one place to read from.
+const DEFAULT_MASS_KG = 80.0
+var mass_kg: float = DEFAULT_MASS_KG
 const AIM_RADIUS_PX = 20
 const MAX_RANGE_M = 16.0
 # This project's world runs at Godot's default gravity, 980 px/s^2 (measured
@@ -25,16 +32,23 @@ const MAX_RANGE_M = 16.0
 # 980 / 9.81 = ~100, so 1 meter in the sim equals ~100 pixels here.
 const PIXELS_PER_METER = 100.0
 
+# Quadratic air drag, ported from sim/air.py (issue #18): drag force = -0.5 *
+# air density * drag coefficient * cross-section area * speed * velocity.
+# DRAG_COEFFICIENT and BODY_RADIUS_M are sim.Body's own defaults for a
+# sphere -- the same choice hover_pusher.gd already made for this same body,
+# and notebook 15 never overrode either for Wax, so this doesn't either.
+const AIR_DENSITY_KG_PER_M3 = 1.225
+const DRAG_COEFFICIENT = 0.47
+const BODY_RADIUS_M = 0.3
+
 @onready var state_machine: PlayerStateMachine = $StateMachine
 @onready var animated_sprite: AnimatedSprite2D = $AnimatedSprite2D
 @onready var reticle: Polygon2D = $Reticle
 @onready var steel_lines: Node2D = $SteelLines
 @onready var push_arrow: Node2D = $PushArrow
-# The coin this player is holding. Deliberately separate from the general
-# metal query below: your own held coin is not something you can push off.
-# Someone ELSE's held coin is fair game, which is why the exclusion is by
-# identity rather than by a global "is anyone carrying this" flag.
-@onready var carried_coin: RigidBody2D = $"../Coin"
+# Which coins the player has, and which one (if any) is in hand right now.
+# Issue #5.
+@onready var coin_inventory: CoinInventory = $CoinInventory
 @onready var push_mode_readout: Label = $"../HUD/Readouts/PushModeReadout"
 
 var pending_recoil: Vector2 = Vector2.ZERO
@@ -112,7 +126,6 @@ var air_braking_enabled: bool = true
 
 
 func _ready() -> void:
-	carried_coin.add_collision_exception_with(self)
 	# res:// is read-only in an exported build, so logging there works from the
 	# editor and crashes anywhere else. OS.has_feature("editor") is true when
 	# running the project directly with the Godot binary -- including headless
@@ -134,10 +147,13 @@ func _physics_process(delta: float) -> void:
 
 	if not is_on_floor():
 		velocity += get_gravity() * delta
+	_apply_air_drag(delta)
 
-	# While carried, the player owns the coin's position outright.
-	if carried_coin.is_carried:
-		carried_coin.global_position = global_position + Vector2(0, 13)
+	# While carried, the player owns the coin's position outright. coin_in_play
+	# can be null (nothing left in reserve to hold), so this has to check
+	# before it reads anything off it.
+	if coin_inventory.coin_in_play != null and coin_inventory.coin_in_play.is_carried:
+		coin_inventory.coin_in_play.global_position = global_position + Vector2(0, 13)
 
 	# States that commit to an animation -- Attack, Hurt -- refuse every entry
 	# trigger below until they finish. Everything else can be acted out of
@@ -155,10 +171,6 @@ func _physics_process(delta: float) -> void:
 	if Input.is_action_just_pressed("toggle_air_braking"):
 		air_braking_enabled = not air_braking_enabled
 		print("[toggle] midair braking -> ", "ON" if air_braking_enabled else "OFF")
-	# Testing affordance, not a mechanic -- see coin.gd's recall().
-	if Input.is_action_just_pressed("reset_hover"):
-		carried_coin.recall()
-		print("[toggle] coin recalled to hand")
 	_poll_selection_inputs()
 	_update_toggle_readout()
 
@@ -337,6 +349,23 @@ func _apply_ground_movement() -> void:
 		state_machine.transition_to("Idle")
 
 
+func _apply_air_drag(delta: float) -> void:
+	# Same formula and constants hover_pusher.gd already uses for this same
+	# body, ported to the live game (issue #18). Runs every tick, grounded or
+	# not, matching sim/air.py's AirDrag power: it applies to every non-fixed
+	# body unconditionally, not just falling ones. At ground running speed
+	# (3 m/s) the force this produces is under a newton, so it's harmless
+	# there -- it only starts to matter at the speeds a real fall reaches.
+	var speed_m_per_s: float = velocity.length() / PIXELS_PER_METER
+	if speed_m_per_s < 0.001:
+		return
+	var cross_section_area_m2: float = PI * BODY_RADIUS_M * BODY_RADIUS_M
+	var drag_force_n: float = (0.5 * AIR_DENSITY_KG_PER_M3 * DRAG_COEFFICIENT
+		* cross_section_area_m2 * speed_m_per_s * speed_m_per_s)
+	var drag_force_px: float = drag_force_n * PIXELS_PER_METER
+	velocity += -velocity.normalized() * drag_force_px / mass_kg * delta
+
+
 func compute_animation_offset_y() -> float:
 	# The vertical anchor point used by aiming: half the height of the
 	# current animation frame's visible (non-transparent) pixels, offset
@@ -408,8 +437,12 @@ func find_metal_in_range() -> Array:
 	var range_px: float = MAX_RANGE_M * PIXELS_PER_METER
 	var found: Array = []
 	for metal in get_tree().get_nodes_in_group("metal"):
-		if metal == carried_coin and carried_coin.is_carried:
-			continue  # your own hand is not something to push off
+		# Your own held coin is not something you can push off. Someone ELSE's
+		# held coin is fair game (once that exists), which is why this is an
+		# identity check against the one coin you hold, not a general "is
+		# anyone carrying this" flag.
+		if metal == coin_inventory.coin_in_play and metal.is_carried:
+			continue
 		if global_position.distance_to(metal.global_position) <= range_px:
 			found.append(metal)
 	return found
@@ -431,8 +464,10 @@ func _update_toggle_readout() -> void:
 	# out of step with the actual setting.
 	var push_mode_text: String = "Steady" if push_mode == PushMode.STEADY else "Active control"
 	var air_braking_text: String = "On" if air_braking_enabled else "Off"
+	var held_coin_count: int = 1 if (coin_inventory.coin_in_play != null and coin_inventory.coin_in_play.is_carried) else 0
 	push_mode_readout.text = ("Push mode (C): " + push_mode_text
 		+ "\nMidair braking (V): " + air_braking_text
+		+ "\nCoins: %d in hand, %d in reserve" % [held_coin_count, coin_inventory.coins_in_reserve]
 		+ "\nSelect (M): " + SelectionMode.keys()[selection_mode] + "   " + _selection_detail()
 		+ "\n%d of %d metal in range selected"
 			% [select_targets().size(), find_metal_in_range().size()])
