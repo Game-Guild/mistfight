@@ -1,71 +1,71 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene format=3 uid="uid://couhvdj0t41gv"]
 
 [ext_resource type="PackedScene" path="res://coin.tscn" id="1_coin"]
 [ext_resource type="PackedScene" path="res://tests/stopwatch.tscn" id="2_stopwatch"]
-[ext_resource type="Script" path="res://speed_bubble_region.gd" id="3_bubble_region"]
-[ext_resource type="Script" path="res://tests/trajectory_dots.gd" id="4_dots"]
-[ext_resource type="Script" path="res://tests/bubble_drop_trigger.gd" id="5_trigger"]
+[ext_resource type="Script" uid="uid://bocpf5hq2ojw0" path="res://speed_bubble_region.gd" id="3_bubble_region"]
+[ext_resource type="Script" uid="uid://1ba5mqiwuc5k" path="res://tests/trajectory_dots.gd" id="4_dots"]
+[ext_resource type="Script" uid="uid://ugrq7upyfqru" path="res://tests/bubble_drop_trigger.gd" id="5_trigger"]
 
 [sub_resource type="WorldBoundaryShape2D" id="WorldBoundaryShape2D_floor"]
 
-[node name="BubbleDropTest" type="Node2D"]
+[node name="BubbleDropTest" type="Node2D" unique_id=2083167782]
 
-[node name="Floor" type="StaticBody2D" parent="."]
+[node name="Floor" type="StaticBody2D" parent="." unique_id=425099861]
 position = Vector2(0, 270)
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Floor"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Floor" unique_id=759150788]
 shape = SubResource("WorldBoundaryShape2D_floor")
 
-[node name="Camera2D" type="Camera2D" parent="."]
+[node name="Camera2D" type="Camera2D" parent="." unique_id=778453493]
 position = Vector2(400, 150)
+zoom = Vector2(1.5, 1.5)
 
-[node name="ControlCoin" parent="." instance=ExtResource("1_coin") groups=["metal", "test_coins"]]
+[node name="ControlCoin" parent="." unique_id=1170447110 groups=["test_coins"] instance=ExtResource("1_coin")]
 position = Vector2(100, 30)
 
-[node name="FastBubbleCoin" parent="." instance=ExtResource("1_coin") groups=["metal", "test_coins"]]
+[node name="FastBubbleCoin" parent="." unique_id=711203206 groups=["test_coins"] instance=ExtResource("1_coin")]
 position = Vector2(400, 30)
 
-[node name="SlowBubbleCoin" parent="." instance=ExtResource("1_coin") groups=["metal", "test_coins"]]
+[node name="SlowBubbleCoin" parent="." unique_id=1685814652 groups=["test_coins"] instance=ExtResource("1_coin")]
 position = Vector2(700, 30)
 
-[node name="FastBubble" type="Area2D" parent="."]
+[node name="FastBubble" type="Area2D" parent="." unique_id=92030523]
 position = Vector2(400, 150)
 script = ExtResource("3_bubble_region")
 radius_px = 35.0
-time_factor = 5.0
 
-[node name="SlowBubble" type="Area2D" parent="."]
+[node name="SlowBubble" type="Area2D" parent="." unique_id=698655350]
 position = Vector2(700, 150)
 script = ExtResource("3_bubble_region")
 radius_px = 35.0
 time_factor = 0.2
 
-[node name="ControlStopwatch" parent="." instance=ExtResource("2_stopwatch")]
+[node name="ControlStopwatch" parent="." unique_id=767855248 instance=ExtResource("2_stopwatch")]
 position = Vector2(100, 260)
 watched_coin = NodePath("../ControlCoin")
 result_label = "control"
 
-[node name="FastBubbleStopwatch" parent="." instance=ExtResource("2_stopwatch")]
+[node name="FastBubbleStopwatch" parent="." unique_id=2007052811 instance=ExtResource("2_stopwatch")]
 position = Vector2(400, 260)
 watched_coin = NodePath("../FastBubbleCoin")
 result_label = "fast_bubble_5x"
 
-[node name="SlowBubbleStopwatch" parent="." instance=ExtResource("2_stopwatch")]
+[node name="SlowBubbleStopwatch" parent="." unique_id=934589344 instance=ExtResource("2_stopwatch")]
 position = Vector2(700, 260)
 watched_coin = NodePath("../SlowBubbleCoin")
 result_label = "slow_bubble_0.2x"
 
-[node name="ControlDots" type="Node2D" parent="." groups=["test_trajectory_dots"]]
+[node name="ControlDots" type="Node2D" parent="." unique_id=1954200909 groups=["test_trajectory_dots"]]
 script = ExtResource("4_dots")
 watched_coin = NodePath("../ControlCoin")
 
-[node name="FastBubbleDots" type="Node2D" parent="." groups=["test_trajectory_dots"]]
+[node name="FastBubbleDots" type="Node2D" parent="." unique_id=529420612 groups=["test_trajectory_dots"]]
 script = ExtResource("4_dots")
 watched_coin = NodePath("../FastBubbleCoin")
 
-[node name="SlowBubbleDots" type="Node2D" parent="." groups=["test_trajectory_dots"]]
+[node name="SlowBubbleDots" type="Node2D" parent="." unique_id=1394087435 groups=["test_trajectory_dots"]]
 script = ExtResource("4_dots")
 watched_coin = NodePath("../SlowBubbleCoin")
 
-[node name="Trigger" type="Node2D" parent="."]
+[node name="Trigger" type="Node2D" parent="." unique_id=578445306]
 script = ExtResource("5_trigger")
