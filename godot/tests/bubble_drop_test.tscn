@@ -1,0 +1,71 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="PackedScene" path="res://coin.tscn" id="1_coin"]
+[ext_resource type="PackedScene" path="res://tests/stopwatch.tscn" id="2_stopwatch"]
+[ext_resource type="Script" path="res://speed_bubble_region.gd" id="3_bubble_region"]
+[ext_resource type="Script" path="res://tests/trajectory_dots.gd" id="4_dots"]
+[ext_resource type="Script" path="res://tests/bubble_drop_trigger.gd" id="5_trigger"]
+
+[sub_resource type="WorldBoundaryShape2D" id="WorldBoundaryShape2D_floor"]
+
+[node name="BubbleDropTest" type="Node2D"]
+
+[node name="Floor" type="StaticBody2D" parent="."]
+position = Vector2(0, 270)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Floor"]
+shape = SubResource("WorldBoundaryShape2D_floor")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2(400, 150)
+
+[node name="ControlCoin" parent="." instance=ExtResource("1_coin") groups=["metal", "test_coins"]]
+position = Vector2(100, 30)
+
+[node name="FastBubbleCoin" parent="." instance=ExtResource("1_coin") groups=["metal", "test_coins"]]
+position = Vector2(400, 30)
+
+[node name="SlowBubbleCoin" parent="." instance=ExtResource("1_coin") groups=["metal", "test_coins"]]
+position = Vector2(700, 30)
+
+[node name="FastBubble" type="Area2D" parent="."]
+position = Vector2(400, 150)
+script = ExtResource("3_bubble_region")
+radius_px = 35.0
+time_factor = 5.0
+
+[node name="SlowBubble" type="Area2D" parent="."]
+position = Vector2(700, 150)
+script = ExtResource("3_bubble_region")
+radius_px = 35.0
+time_factor = 0.2
+
+[node name="ControlStopwatch" parent="." instance=ExtResource("2_stopwatch")]
+position = Vector2(100, 260)
+watched_coin = NodePath("../ControlCoin")
+result_label = "control"
+
+[node name="FastBubbleStopwatch" parent="." instance=ExtResource("2_stopwatch")]
+position = Vector2(400, 260)
+watched_coin = NodePath("../FastBubbleCoin")
+result_label = "fast_bubble_5x"
+
+[node name="SlowBubbleStopwatch" parent="." instance=ExtResource("2_stopwatch")]
+position = Vector2(700, 260)
+watched_coin = NodePath("../SlowBubbleCoin")
+result_label = "slow_bubble_0.2x"
+
+[node name="ControlDots" type="Node2D" parent="." groups=["test_trajectory_dots"]]
+script = ExtResource("4_dots")
+watched_coin = NodePath("../ControlCoin")
+
+[node name="FastBubbleDots" type="Node2D" parent="." groups=["test_trajectory_dots"]]
+script = ExtResource("4_dots")
+watched_coin = NodePath("../FastBubbleCoin")
+
+[node name="SlowBubbleDots" type="Node2D" parent="." groups=["test_trajectory_dots"]]
+script = ExtResource("4_dots")
+watched_coin = NodePath("../SlowBubbleCoin")
+
+[node name="Trigger" type="Node2D" parent="."]
+script = ExtResource("5_trigger")

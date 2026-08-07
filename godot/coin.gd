@@ -157,19 +157,27 @@ func _physics_process(delta: float) -> void:
 		# inventory exists, the same way it never needed to know about Player.
 		picked_up.emit(self)
 		return
+	# Local time: this coin's own experienced delta this tick, scaled by
+	# whatever bubble (if any) contains its current position (issue #24).
+	# Computed once, used for everything below that is a question of WHEN
+	# rather than WHERE (the when/where rule from issue #24) -- gravity,
+	# drag, and movement all read this instead of the engine's raw delta.
+	var local_delta: float = BubbleClock.local_dt(delta, global_position)
+
 	# Gravity, then move. Any steelpush force arriving this tick has already
 	# been folded into velocity by receive_push() below, which runs from the
 	# player's own _physics_process.
-	velocity += get_gravity() * delta
-	_apply_air_drag(delta)
-	_move_by_sweeping(delta)
+	velocity += get_gravity() * local_delta
+	_apply_air_drag(local_delta)
+	_move_by_sweeping(local_delta)
 
 
-func _apply_air_drag(delta: float) -> void:
+func _apply_air_drag(local_delta: float) -> void:
 	# Same formula player.gd and hover_pusher.gd use for their own drag,
 	# ported here for the coin (issue #18). sim/air.py applies this to every
 	# non-fixed body unconditionally, so it runs every tick in flight, not
-	# just while falling.
+	# just while falling. Takes the caller's already-bubble-scaled delta
+	# (issue #24) -- this function never queries BubbleClock itself.
 	var speed_m_per_s: float = velocity.length() / Player.PIXELS_PER_METER
 	if speed_m_per_s < 0.001:
 		return
@@ -177,14 +185,15 @@ func _apply_air_drag(delta: float) -> void:
 	var drag_force_n: float = (0.5 * AIR_DENSITY_KG_PER_M3 * DRAG_COEFFICIENT
 		* cross_section_area_m2 * speed_m_per_s * speed_m_per_s)
 	var drag_force_px: float = drag_force_n * Player.PIXELS_PER_METER
-	velocity += -velocity.normalized() * drag_force_px / mass * delta
+	velocity += -velocity.normalized() * drag_force_px / mass * local_delta
 
 
-func _move_by_sweeping(delta: float) -> void:
+func _move_by_sweeping(local_delta: float) -> void:
 	# How far the coin means to travel this tick. move_and_collide() wants a
 	# distance, not a speed, so the per-second velocity is scaled by how long
-	# this tick lasted.
-	var travel_remaining: Vector2 = velocity * delta
+	# this tick lasted -- this coin's own already-bubble-scaled delta
+	# (issue #24), not the engine's raw one.
+	var travel_remaining: Vector2 = velocity * local_delta
 
 	for sweep_step in range(MAX_SWEEP_STEPS):
 		# Drag the coin's shape along the whole of travel_remaining and stop it
@@ -193,7 +202,7 @@ func _move_by_sweeping(delta: float) -> void:
 		if collision == null:
 			return
 
-		_respond_to_collision(collision, delta)
+		_respond_to_collision(collision, local_delta)
 
 		# Whatever travel did not happen because something got in the way. The
 		# part of it heading into the surface is gone -- the surface is there --
@@ -204,7 +213,7 @@ func _move_by_sweeping(delta: float) -> void:
 			return
 
 
-func _respond_to_collision(collision: KinematicCollision2D, delta: float) -> void:
+func _respond_to_collision(collision: KinematicCollision2D, local_delta: float) -> void:
 	# move_and_collide() only reports: it stopped the coin at the surface and
 	# handed back the facts. Deciding what the impact means happens here.
 	var surface_normal: Vector2 = collision.get_normal()
@@ -227,7 +236,7 @@ func _respond_to_collision(collision: KinematicCollision2D, delta: float) -> voi
 	# Sliding friction. A coin skidding along the ground slows at
 	# friction_kinetic * gravity, which famously does not depend on its mass --
 	# so this needs no reference to how heavy the coin is.
-	var friction_slowdown: float = FRICTION_KINETIC * get_gravity().length() * delta
+	var friction_slowdown: float = FRICTION_KINETIC * get_gravity().length() * local_delta
 	var sliding_speed: float = velocity_along_surface.length()
 	if sliding_speed <= friction_slowdown:
 		# Friction has more than enough bite to stop the skid this tick. Zero it
@@ -274,7 +283,13 @@ func receive_push(direction: Vector2, force: float) -> void:
 	# `direction` points from the pusher toward this coin, so pushing along it
 	# shoves the coin directly away from them.
 	var coin_push: Vector2 = direction * force
-	var push_delta: float = get_physics_process_delta_time()
+	# This coin's own local dt (issue #24) -- queried with THIS coin's
+	# position, not the pusher's, since a coin could sit in a different
+	# bubble than whoever is pushing it. get_physics_process_delta_time() is
+	# still the right raw input here: this runs independent of this coin's
+	# own _physics_process (see the docstring above it), so there is no
+	# already-computed local_delta from this tick to reuse.
+	var push_delta: float = BubbleClock.local_dt(get_physics_process_delta_time(), global_position)
 	var surface_normal: Vector2 = _find_surface_being_pushed_into(coin_push)
 
 	if surface_normal == Vector2.ZERO:

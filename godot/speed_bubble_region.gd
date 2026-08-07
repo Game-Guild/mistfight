@@ -38,3 +38,15 @@ func _ready() -> void:
 	monitorable = false
 	bubble = SpeedBubble.new(global_position, radius_px, time_factor)
 	add_to_group("bubbles")
+	queue_redraw()
+
+
+# Plain placeholder circle so a bubble is visible at all -- gold-ish for
+# speeding time up, blue-ish for slowing it down, translucent so a body
+# falling through is still visible on top of it. This is NOT the boundary
+# distortion effect Elliott asked for on issue #26 -- that is a real design
+# question (what should it actually look like) still waiting on a design
+# session; this is only enough to see where a bubble is at all.
+func _draw() -> void:
+	var fill_color: Color = Color(1.0, 0.85, 0.2, 0.18) if time_factor > 1.0 else Color(0.25, 0.55, 1.0, 0.18)
+	draw_circle(Vector2.ZERO, radius_px, fill_color)

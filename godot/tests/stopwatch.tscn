@@ -1,0 +1,14 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://tests/stopwatch.gd" id="1_stopwatch"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_floorsensor"]
+size = Vector2(30, 20)
+
+[node name="Stopwatch" type="Node2D" groups=["test_stopwatches"]]
+script = ExtResource("1_stopwatch")
+
+[node name="FloorSensor" type="Area2D" parent="."]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="FloorSensor"]
+shape = SubResource("RectangleShape2D_floorsensor")
